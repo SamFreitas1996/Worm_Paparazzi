@@ -1,0 +1,139 @@
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
+# import matplotlib.pyplot as plt
+import numpy as np
+import PIL
+from natsort import natsorted
+from matplotlib import image
+import threading
+import tensorflow as tf
+
+from tensorflow import keras
+from tensorflow.keras import layers
+from tensorflow.keras.models import Sequential
+import pathlib
+import time
+
+global predictions_dict
+
+predictions_dict = dict()
+
+################ add threading 
+
+t_time = time.time()
+
+num_threads = 5
+
+print('Number of threads: ', num_threads)
+
+# data_dir2 = pathlib.Path('E:\Codes\TFWP_training')
+
+def make_prediction(each_file,model):
+
+    img_index = int(''.join(filter(str.isdigit,each_file)))
+
+    this_img = keras.preprocessing.image.load_img(each_file, target_size=(img_height, img_width))
+    this_img_array = tf.expand_dims(keras.preprocessing.image.img_to_array(this_img), 0)
+    this_prediction = model.predict(this_img_array)
+    score = tf.nn.softmax(this_prediction[0])
+
+
+    predictions_dict.update({img_index:np.array(score[1])})
+
+def make_prediction_on_array(each_array,model):
+
+    for i,each_file in enumerate(each_array):
+
+        each_file = str(each_file)
+
+        img_index = int(''.join(filter(str.isdigit,each_file.replace('u23',''))))
+
+        this_img = keras.preprocessing.image.load_img(each_file, target_size=(img_height, img_width))
+        this_img_array = tf.expand_dims(keras.preprocessing.image.img_to_array(this_img), 0)
+        this_prediction = model.predict(this_img_array)
+        score = tf.nn.softmax(this_prediction[0])
+
+        predictions_dict.update({img_index:np.array(score[1])})
+
+
+# initial setting sizes
+batch_size = 32
+img_height = 192
+img_width = 192
+
+
+# classes 
+class_names = ['no_worms', 'worms']
+
+# number of classes 
+num_classes = 2
+
+# initial data augmentation 
+data_augmentation = keras.Sequential(
+  [
+    layers.experimental.preprocessing.RandomFlip("horizontal", 
+                                                 input_shape=(img_height, 
+                                                              img_width,
+                                                              3)),
+    layers.experimental.preprocessing.RandomRotation(0.0),
+    layers.experimental.preprocessing.RandomZoom(0.0),
+  ]
+)
+
+# setup the model
+model = Sequential([
+  data_augmentation,
+  layers.experimental.preprocessing.Rescaling(1./255),
+  layers.Conv2D(16, 3, padding='same', activation='relu'),
+  layers.MaxPooling2D(),
+  layers.Conv2D(32, 3, padding='same', activation='relu'),
+  layers.MaxPooling2D(),
+  layers.Conv2D(64, 3, padding='same', activation='relu'),
+  layers.MaxPooling2D(),
+  layers.Dropout(0.2),
+  layers.Flatten(),
+  layers.Dense(128, activation='tanh'),
+  layers.Dense(num_classes)
+])
+
+# compile the model
+model.compile(optimizer='adam',
+              loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+              metrics=['accuracy'])
+
+# load the model weights
+model.load_weights('saved_model/my_model5.h5')
+
+# execution path of the temp_imgs
+execution_path = os.path.join(os.getcwd(),'temp_imgs')
+
+# sort and filter the images
+all_files = natsorted(os.listdir(execution_path))
+all_images_array = []
+for each_file in all_files:
+    if(each_file.endswith(".jpg") or each_file.endswith(".png")):
+        all_images_array.append(os.path.join(execution_path,each_file))
+
+# make_prediction(each_file,model)
+split_images_array = np.array_split(all_images_array,num_threads)
+# make_prediction_on_array(split_images_array[0],model)
+
+elap = time.time() - t_time
+print(elap)
+
+tt = []
+for i in range(num_threads):
+    t = threading.Thread(target = make_prediction_on_array,args = (split_images_array[i],model))
+    tt.append(t)
+
+for i in range(num_threads):
+    tt[i].start()
+
+for i in range(num_threads):
+    tt[i].join()
+
+for key in sorted(predictions_dict):
+   print(key, ',', predictions_dict[key],',')
+
+elap = time.time() - t_time
+print(elap)
