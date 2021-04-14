@@ -26,10 +26,10 @@ raw_sess_data_aft=(zeros(length(data_names),240));
 raw_sess_data_aft_bw=(zeros(length(data_names),240));
 raw_sess_data_bef_bw=(zeros(length(data_names),240));
 
+incomplete_data_censor = cell(1,length(data_names));
 % this is a parfor loop
 parfor i = 1:length(data_names)
 % for i = length(data_names)-5:length(data_names)
-
     
     disp(['Reading data for session: ' num2str(i)])
     
@@ -70,7 +70,14 @@ parfor i = 1:length(data_names)
             zstack_aft_temp = bwareaopen((zstack_aft_temp>0),15).*zstack_aft_temp;
             
             sess_activity_integral = imadd(gather(zstack_bef_temp),gather(zstack_aft_temp));
-            sess_activity_integral = bwareaopen((sess_activity_integral>3),10,4);
+            
+            sess_activity_integral(1:10,:) = 0;
+            
+            %threshold_val = mean(nonzeros(sess_activity_integral)) + std(nonzeros(sess_activity_integral));
+            
+            threshold_val = 3; % 3
+            
+            sess_activity_integral = sess_activity_integral.*bwareaopen((sess_activity_integral>threshold_val),20,4);
             % find any pixels that are over 0 in value
             % then remove any "islands" that are over 15 pixels in value
             % then use that binary image to parse the previous data from the
@@ -103,9 +110,15 @@ parfor i = 1:length(data_names)
             bw_sess_img_bef = (sess_data.zstack_bef.*sess_activity_integral_mask)>0;
             bw_sess_img_aft = (sess_data.zstack_aft.*sess_activity_integral_mask)>0;
             
+            temp_idx = zeros(1,240);
+            
             for j = 1:240
                 
                 loop_ROI = (sess_data.thisROI==j);
+                
+                if isequal(sum(loop_ROI(:)),0)
+                    temp_idx(j) = 1;
+                end
                 
                 raw_sess_data_bef_bw(i,j) = sum(sum((bw_sess_img_bef).*loop_ROI));
                 raw_sess_data_aft_bw(i,j) = sum(sum((bw_sess_img_aft).*loop_ROI));
@@ -127,6 +140,9 @@ parfor i = 1:length(data_names)
                 raw_sess_data_integral(i,j) = raw_sess_data_bef(i,j) + raw_sess_data_aft(i,j);
             end
         end
+        
+        incomplete_data_censor{i} = temp_idx
+        
     catch
         for j=1:240
             raw_sess_data_integral(i,j)=0;
@@ -143,11 +159,19 @@ if runoff_cutoff == 0
     runoff_cutoff2 = runoff_cutoff;
     
 end
+disp('Creating incomplete data censor');
 
+incomplete_data_censor_full = zeros(1,240);
+for i = 1:length(incomplete_data_censor)
+    
+    incomplete_data_censor_full = incomplete_data_censor_full + incomplete_data_censor{i};
+    
+end
+
+incomplete_data_censor_full = double(incomplete_data_censor_full>0);
 
 % this is depreciated but for some reason i use variables generated here
 % later on just for specific lengths and heights of data
-disp('Creating 2nd censor');
 % sess_data=load([data_dir(1).folder '/' data_names{runoff_cutoff}]);
 %
 % sess_activity_integral = imadd(gather(sess_data.zstack_bef),gather(sess_data.zstack_aft));
@@ -173,7 +197,7 @@ disp('Creating 2nd censor');
 %
 % censored_wells2 = double(logical(censored_wells_runoff_depreciated + censored_wells));
 
-censored_wells2 = zeros(1,240);
+censored_wells2 = incomplete_data_censor_full;
 
 save(char([data_storage 'processed_data/proc_zstacks/zstacks.mat']),...
     'raw_sess_data_aft', 'raw_sess_data_bef', 'raw_sess_data_integral','censored_wells2','runoff_cutoff2',...

@@ -1,4 +1,6 @@
 % WP_create_zstacks
+% this function takes the imput images and runs through image processing
+% steps to create a single representation (zstack) of each unique session
 
 function [zstacks_paths,sess_nums,num_days] = ...
     WP_create_zstacks(...
@@ -33,7 +35,7 @@ end
 % This should all be done previously from WPdata but just in case
 save_peaks_name = [data_storage 'raw_data/peaks.mat'];
 show_plots_peaks = 0;
-try 
+try
     load(char(save_peaks_name))
     disp('Session information found in files or workspace')
 catch
@@ -41,7 +43,11 @@ catch
     save(char(save_peaks_name),'sess_per_day','pks','locs');
 end
 % create len_k
-len_k=(locs(2,2)-locs(2,1)-1)/2;
+% find the first day where there is enough data 
+temp = sum(logical(locs),2);
+[temp,~] = find(temp>1);
+len_k=(locs(temp(1),2)-locs(temp(1),1)-1)/2;
+clear temp
 
 % load in the experiment specific ROIs
 try
@@ -67,7 +73,7 @@ for i = 1:length(nonzeros(sum(locs,2)))
     end
 end
 
-% load in the censor 
+% load in the censor
 % load(char([data_storage '/raw_data/censor.mat']))
 
 
@@ -82,7 +88,9 @@ first_reg   = [1,1];
 middle_reg  = [round(num_days/2),2];
 last_reg    = [num_days,2];
 
+indiv_ROI_norm = 1;
 
+% reshape the ROI 2D array into a single vectored object array
 num_sess = max(sess_nums(:));
 newROIs2=cell(1,num_sess);
 for i=1:max(sess_nums(:))
@@ -95,7 +103,8 @@ clear newROIs
 
 tic
 if compute_new_zstack_data
-    
+% %     start_sess = 46;
+    %%%%% should be parfor
     parfor i=start_sess:num_sess
         
         [a,b] = find(sess_nums == i);
@@ -118,17 +127,17 @@ if compute_new_zstack_data
         end
         
         %disp(['Fixing ROI for day' num2str(a) ' session' num2str(b)]);
-        
-        temp_ROI= (zeros(size(newROIs2{i})));
-        temp_ROI_round = (round(newROIs2{i}));
-        for k = 1:240
-            aa=(temp_ROI_round==k);
-            S = regionprops(aa, 'Area');
-            L = bwlabel(aa);
-            BW2 = ismember(L, find([S.Area] >= 10000));
-            temp_ROI = temp_ROI + k*BW2;
-        end
-        newROIs2{i}=gather(temp_ROI);
+        %
+        %         temp_ROI= (zeros(size(newROIs2{i})));
+        %         temp_ROI_round = (round(newROIs2{i}));
+        %         for k = 1:240
+        %             aa=(temp_ROI_round==k);
+        %             S = regionprops(aa, 'Area');
+        %             L = bwlabel(aa);
+        %             BW2 = ismember(L, find([S.Area] >= 10000));
+        %             temp_ROI = temp_ROI + k*BW2;
+        %         end
+        %         newROIs2{i}=gather(temp_ROI);
         
         % find variance in the wells
         DoS = 4*std2(nonzeros(double(stack_aft{1}).*(newROIs2{i}>0)))^2;
@@ -136,49 +145,110 @@ if compute_new_zstack_data
         % if you want to align the images
         if ~dont_align_images
             
-            % create the first image
-            stack_aft{1}=imbilatfilt(double(stack_aft{1}),DoS);
-%             first_image = stack_aft{1};
+            %             first_image = stack_aft{1};
             % register the bef{1} to aft{1}
-            % this shouldnt fail, but can, just rerun or add a trycatch
             try
-                [~, ~, A]=ecc(stack_bef{1},stack_aft{1}, NoL, NoI, transform, init);
+                [A]=dtf_reg(stack_bef{1},stack_aft{1},0,0);
             catch
-                [~, ~, A]=ecc(stack_bef{1},stack_aft{1}, NoL, NoI, transform, init);
+                try
+                    [~, ~, A]=ecc(stack_bef{1},stack_aft{1}, NoL, NoI, transform, init);
+                catch
+                    disp(['IMPROPER REGISTRATION ON day' num2str(a) ' session' num2str(b)]);
+                end
             end
+            % filter the final registered image to preserve lines but gt
+            % rid of background variance
             stack_bef{1}=imbilatfilt(double(A),DoS);
+            
+            
             %disp(['Registering data for day' num2str(a) ' session' num2str(b)]);
             % Register all the images to the base image
-            
             for k =2:len_k
+                % register stack before to stack after
                 try
-                    [~, ~, A]=ecc(stack_bef{k},stack_aft{1}, NoL, NoI, transform, init);
+                    [A]=dtf_reg(stack_bef{k},stack_aft{1},0,0);
                 catch
-                    [~, ~, A]=ecc(stack_bef{k},stack_aft{1}, NoL, NoI, transform, init);
-                    disp(['v2 on stack bef ' num2str([a,b])]);
+                    try
+                        [~, ~, A]=ecc(stack_bef{k},stack_aft{1}, NoL, NoI, transform, init);
+                        disp(['v2 on stack bef ' num2str([a,b])]);
+                    catch
+                        disp(['IMPROPER REGISTRATION ON day' num2str(a) ' session' num2str(b)]);
+                        disp('Using unregistered image')
+                        A = stack_bef{k};
+                    end
                 end
+                % filter the registered iamge
                 stack_bef{k}=imbilatfilt(double(A),DoS);
+                % register stack_aft to the first image
                 try
-                    [~, ~, ecc_temp1]=ecc(stack_aft{k},stack_aft{1}, NoL, NoI , transform, init);
+                    [ecc_temp1]=dtf_reg(stack_aft{k},stack_aft{1},0,0);
                 catch
-                    [~, ~, ecc_temp1]=ecc(stack_aft{k},stack_aft{1}, NoL, NoI, transform, init);
-                    disp(['v2 on stack aft ' num2str([a,b])]);
+                    try
+                        [~, ~, ecc_temp1]=ecc(stack_aft{k},stack_aft{1}, NoL, NoI, transform, init);
+                        disp(['v2 on stack aft ' num2str([a,b])]);
+                    catch
+                        disp(['IMPROPER REGISTRATION ON day' num2str(a) ' session' num2str(b)]);
+                        disp('Using unregistered image')
+                        ecc_temp1 = stack_bef{k};
+                    end
                 end
-                %                 [~, ~, ecc_temp2]=ecc(imhistmatch(stack_aft{k}, stack_aft{1}),stack_aft{1}, NoL, NoI, transform, init);
+                % [~, ~, ecc_temp2]=ecc(imhistmatch(stack_aft{k}, stack_aft{1}),stack_aft{1}, NoL, NoI, transform, init);
+                % filter the registered image
                 stack_aft{k}=imbilatfilt(double(ecc_temp1),DoS);
             end
+            % finally filter the first image
+            stack_aft{1}=imbilatfilt(double(stack_aft{1}),DoS);
             
         else
             for k = 1:len_k
                 stack_aft{k} = double(stack_aft{k});
                 stack_bef{k} = double(stack_bef{k});
-%                 first_image = stack_aft{1};
+                %                 first_image = stack_aft{1};
             end
             
         end
         %disp(['Stacking data for day' num2str(a) ' session' num2str(b)]);
         
+        % [focus_measure] = WP_measure_focus(stack,rad_pixels,create_figure,title_figure)
+
+        
         if normalize_intensities
+            [fm] = WP_measure_focus([stack_bef stack_aft],0,0,num2str([a,b]));
+            if sum(fm<.7) || sum(fm<.7)<10
+                
+                
+                focus_outliers = isoutlier(fm,'median');
+                check_fm = focus_outliers.*(fm<.7);
+                
+                if sum(check_fm)
+                    disp(['Day' num2str(a) ' session' num2str(b) ' --' num2str(sum(fm<.7)) ' images potentially out of focus']);
+                    
+                    focus_bad_images = nonzeros((1:(len_k*2)).*check_fm);
+                    for k = 1:length(focus_bad_images)
+                        if focus_bad_images(k) > len_k
+                            bad_img = focus_bad_images(k)-len_k;
+                            if ~isequal(bad_img,len_k)
+                                stack_aft{focus_bad_images(k)-len_k} = stack_aft{focus_bad_images(k)-len_k+1};
+                            else
+                                stack_aft{focus_bad_images(k)-len_k} = stack_aft{focus_bad_images(k)-len_k-1};
+                            end
+                        else
+                            
+                            bad_img = focus_bad_images(k);
+                            if ~isequal(bad_img,len_k)
+                                stack_bef{focus_bad_images(k)} = stack_bef{focus_bad_images(k)+1};
+                            else
+                                stack_bef{focus_bad_images(k)} = stack_bef{focus_bad_images(k)-1};
+                            end
+                        end
+                    end
+                end
+                
+                
+            end
+            
+            % if there is only one image lower than the .7 focus measure threshold
+            % then fix with a replacement
             
             ref_bef = mean2(stack_bef{1});
             ref_aft = mean2(stack_aft{1});
@@ -189,22 +259,25 @@ if compute_new_zstack_data
                 
             end
             
-            % create a mean image 
-            temp = [stack_aft stack_bef];
-            mean_img = mean((cat(3,temp{1:end})),3);
-            
-            % use the mean image from the entire session
-            scaling_ROI = zeros(size(temp_ROI));
-            for k = 1:max(temp_ROI(:))
-                ROI_seg = mean_img.*(temp_ROI==k);
-                seg_mean = mean(ROI_seg(:));
-                scaling_ROI = scaling_ROI + seg_mean*(temp_ROI==k);
-            end
-            scaling_ROI = scaling_ROI/max(scaling_ROI(:));
-            
-            for k = 1:length(stack_aft)
-                stack_aft{k} = stack_aft{k}.*scaling_ROI;
-                stack_bef{k} = stack_aft{k}.*scaling_ROI;
+            if indiv_ROI_norm
+                
+                % create a mean image
+                temp = [stack_aft stack_bef];
+                mean_img = mean((cat(3,temp{1:end})),3);
+                
+                % use the mean image from the entire session
+                scaling_ROI = zeros(size(newROIs2{i}));
+                for k = 1:max(newROIs2{i}(:))
+                    ROI_seg = mean_img.*(newROIs2{i}==k);
+                    seg_mean = mean(nonzeros(ROI_seg(:)));
+                    scaling_ROI = scaling_ROI + seg_mean*(newROIs2{i}==k);
+                end
+                scaling_ROI = scaling_ROI/max(scaling_ROI(:));
+                
+                for k = 1:length(stack_aft)
+                    stack_aft{k} = stack_aft{k}.*scaling_ROI;
+                    stack_bef{k} = stack_aft{k}.*scaling_ROI;
+                end
             end
             
         end
@@ -226,8 +299,17 @@ if compute_new_zstack_data
             temp1 = (stack_aft{k}) - median_img_aft*(1.05);
             temp2 = (stack_bef{k}) - median_img_bef*(1.05);
             % remove negative numbers - necessary
-            temp1(temp1<1)=0;
-            temp2(temp2<1)=0;
+            if indiv_ROI_norm
+                temp1(temp1<0)=0;
+                temp2(temp2<0)=0;
+            else
+                temp1(temp1<1)=0;
+                temp2(temp2<1)=0;
+            end
+            % testing
+            temp1 = temp1.*(bwareaopen(temp1>0,25,4));
+            temp2 = temp2.*(bwareaopen(temp2>0,25,4));
+            
             if calculate_optical_flow
                 centroids_aft{k} = WP_find_centroids(temp1,newROIs2{i});
                 centroids_bef{k} = WP_find_centroids(temp2,newROIs2{i});
@@ -244,7 +326,7 @@ if compute_new_zstack_data
         % how to save
         well_movements=gather((zstack_aft).*(thisROI>0));
         if save_data
-% % % % %             disp(['Saving data for day' num2str(a) ' session' num2str(b)]);
+            % % % % %             disp(['Saving data for day' num2str(a) ' session' num2str(b)]);
             parsave_WP(char(save_name),gather(zstack_aft),gather(zstack_bef),thisROI,first_image,last_image,centroids_aft,centroids_bef);
         end
         if save_aligned_images
@@ -264,6 +346,7 @@ if compute_new_zstack_data
         
     end
     
+    toc
 else
     for i=start_sess:num_sess
         save_name = [data_storage 'raw_data/day' num2str(a) '_session' num2str(b) '.mat'];
@@ -272,17 +355,8 @@ else
 end
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 end
+
+
+
+

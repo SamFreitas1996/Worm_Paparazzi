@@ -52,7 +52,8 @@ if ~skip_nn_runoff
     % if need more training data (dont)
     create_new_training_data = 0;
     if create_new_training_data
-        create_new_training_data_nn(worms_nn_predicted,images,number_loaded);
+        disp('Creating new training data')
+        create_new_training_data_nn_unlabeled(worms_nn_predicted,images);
     end
     
 else
@@ -118,7 +119,7 @@ for i = 1:240
     % if the heath and life spans are within a day of eachother than the
     % most ran
 %     if ~inital_runoff(i)
-        if health_life_diff(i) < 2
+        if health_life_diff(i) < 1
             experimental_runoff(i) = 1;
         end
 %     end
@@ -228,13 +229,24 @@ images = cell(length(ROI_nums),num_images);
 parfor j = lowBound:highBound
     thisROI = newROIs{j};
     thisDiff = diff_imgs{j};
-    for i = ROI_nums
-        s = regionprops(thisROI==i,'BoundingBox');
-        xMin = ceil(s.BoundingBox(1));
-        xMax = xMin + s.BoundingBox(3) - 1;
-        yMin = ceil(s.BoundingBox(2));
-        yMax = yMin + s.BoundingBox(4) - 1;
-        images{i,j} = thisDiff(yMin:yMax,xMin:xMax);
+    try
+        for i = ROI_nums
+            s = regionprops(thisROI==i,'BoundingBox');
+            xMin = ceil(s.BoundingBox(1));
+            xMax = xMin + s.BoundingBox(3) - 1;
+            yMin = ceil(s.BoundingBox(2));
+            yMax = yMin + s.BoundingBox(4) - 1;
+            images{i,j} = thisDiff(yMin:yMax,xMin:xMax);
+        end
+    catch
+        disp(['There was an error creating data on session ' num2str(j)])
+        s = regionprops(thisROI==120,'BoundingBox');
+        
+        error_zero_img = zeros(s.BoundingBox(3),s.BoundingBox(4),'uint8');
+        
+        for i = ROI_nums
+            images{i,j} = error_zero_img;
+        end
     end
 end
 
@@ -249,6 +261,22 @@ for i = 1:240
     
     % create a cell array for filtering
     this_worm_sess_imgs2 = cell(size(this_worm_sess_imgs));
+    
+    for j = 1:length(this_worm_sess_imgs)
+        
+        [x1,x2] = size(this_worm_sess_imgs{j});
+        
+        if ~isequal(x1,x2)
+            
+            largest_x = max([x1,x2]);
+            
+            temp_zeros_array = zeros(largest_x,largest_x,'uint8');
+            temp_zeros_array(1:x1,1:x2) = this_worm_sess_imgs{j};
+            this_worm_sess_imgs{j} = temp_zeros_array;
+            
+        end
+        
+    end
     
     % create the filter
     med_image_worm_sess=(median((cat(3,this_worm_sess_imgs{1:highBound})),3));

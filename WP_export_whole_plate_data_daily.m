@@ -1,5 +1,5 @@
 function WP_export_whole_plate_data_daily(export_data,censored_wells_runoff,data_storage,...
-    exp_nm,this_exp_num,sess_nums,num_days,final_data_export_path,full_exp_name)
+    exp_nm,this_exp_num,sess_nums,num_days,final_data_export_path,full_exp_name,data_points_to_omit)
 
 
 load([data_storage 'processed_data/norm_activity.mat']);
@@ -40,6 +40,8 @@ if export_data
     for i = 1:240
         %         worm_activity{i} = raw_norm_curves(:,i);
         this_worm_bw = sess_diff(:,i);
+        
+        this_worm_bw(data_points_to_omit) = 0;
         
         this_worm_bw2 = NaN(size(sess_nums));
         for j = 1:length(this_worm_bw)

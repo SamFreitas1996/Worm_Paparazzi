@@ -51,8 +51,12 @@ clear temp
 
 % load in the experiment specific ROIs
 try
-    disp('Loading ROIs')
-    load([data_storage 'raw_data/newROIs.mat']);
+    if compute_new_zstack_data
+        disp('Loading ROIs')
+        load([data_storage 'raw_data/newROIs.mat']);
+    else
+        disp('Loading sess data')
+    end
 catch
     error('ROIs not found or improper path given, run WPdata w/ create_custom_ROIs = 1, or change where ROIs are located')
 end
@@ -63,16 +67,31 @@ clear figs
 % set up a session counter
 sess_counter=1;
 total_num_sessions = sum(sess_per_day(:));
-k=0;
-for i = 1:length(nonzeros(sum(locs,2)))
-    for j = 1:length(nonzeros(sum(locs)))
-        if ~isempty(newROIs{i,j})
-            k=k+1;
-            sess_nums(i,j) = k;
+
+% use the ROIs if avaliable otherwise use the locations 
+if compute_new_zstack_data
+    
+    k=0;
+    for i = 1:length(nonzeros(sum(locs,2)))
+        for j = 1:length(nonzeros(sum(locs)))
+            if ~isempty(newROIs{i,j})
+                k=k+1;
+                sess_nums(i,j) = k;
+            end
+        end
+    end
+else
+        
+    k=0;
+    for i = 1:length(nonzeros(sum(locs,2)))
+        for j = 1:length(nonzeros(sum(locs)))
+            if locs(i,j)>0
+                k=k+1;
+                sess_nums(i,j) = k;
+            end
         end
     end
 end
-
 % load in the censor
 % load(char([data_storage '/raw_data/censor.mat']))
 
@@ -92,18 +111,20 @@ indiv_ROI_norm = 1;
 
 % reshape the ROI 2D array into a single vectored object array
 num_sess = max(sess_nums(:));
-newROIs2=cell(1,num_sess);
-for i=1:max(sess_nums(:))
-    [a,b] = find(sess_nums == i);
-    %     disp(num2str([a,b]))
-    newROIs2{i} = newROIs{a,b};
+if compute_new_zstack_data
+    newROIs2=cell(1,num_sess);
+    for i=1:max(sess_nums(:))
+        [a,b] = find(sess_nums == i);
+        %     disp(num2str([a,b]))
+        newROIs2{i} = newROIs{a,b};
+    end
 end
 
 clear newROIs
 
 tic
 if compute_new_zstack_data
-% %     start_sess = 46;
+% %     start_sess = 18;
     %%%%% should be parfor
     parfor i=start_sess:num_sess
         
@@ -270,6 +291,9 @@ if compute_new_zstack_data
                 for k = 1:max(newROIs2{i}(:))
                     ROI_seg = mean_img.*(newROIs2{i}==k);
                     seg_mean = mean(nonzeros(ROI_seg(:)));
+                    if isnan(seg_mean)
+                        seg_mean = 0;
+                    end
                     scaling_ROI = scaling_ROI + seg_mean*(newROIs2{i}==k);
                 end
                 scaling_ROI = scaling_ROI/max(scaling_ROI(:));
@@ -294,10 +318,14 @@ if compute_new_zstack_data
         
         zstack_aft=(zeros(size(stack_aft{1})));
         zstack_bef=(zeros(size(stack_aft{1})));
+        
+        H = fspecial('disk',50);
+        
         for k = 1:len_k
             % remove median of the image stack
-            temp1 = (stack_aft{k}) - median_img_aft*(1.05);
-            temp2 = (stack_bef{k}) - median_img_bef*(1.05);
+            temp1 = (stack_aft{k}) - median_img_aft*(1.1);
+            temp2 = (stack_bef{k}) - median_img_bef*(1.1);
+            
             % remove negative numbers - necessary
             if indiv_ROI_norm
                 temp1(temp1<0)=0;
@@ -306,10 +334,10 @@ if compute_new_zstack_data
                 temp1(temp1<1)=0;
                 temp2(temp2<1)=0;
             end
-            % testing
-            temp1 = temp1.*(bwareaopen(temp1>0,25,4));
-            temp2 = temp2.*(bwareaopen(temp2>0,25,4));
             
+            temp1 = temp1.*(bwareaopen(temp1>1,25,4));
+            temp2 = temp2.*(bwareaopen(temp2>1,25,4));
+                        
             if calculate_optical_flow
                 centroids_aft{k} = WP_find_centroids(temp1,newROIs2{i});
                 centroids_bef{k} = WP_find_centroids(temp2,newROIs2{i});
@@ -349,6 +377,7 @@ if compute_new_zstack_data
     toc
 else
     for i=start_sess:num_sess
+        [a,b] = find(sess_nums == i);
         save_name = [data_storage 'raw_data/day' num2str(a) '_session' num2str(b) '.mat'];
         zstacks_paths{i} = save_name;
     end

@@ -1,0 +1,25 @@
+
+
+In order to make it run on the HPC
+
+1. create a virtual env 
+
+1a. pip install requirements.txt
+
+2. point to the activate the env
+
+3. In your home folder press ctrl+H
+Find the file named ".bashrc"
+
+add the following commands at the end of the file
+
+module load matlab
+module load python/3.8/3.8.2
+source /home/u23/samfreitas/python_dir/env/bin/activate
+
+(please save)
+
+
+4. type matlab in the terminal
+
+5. run Worm_Paparazzi_setupv2.m

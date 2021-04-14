@@ -1,7 +1,7 @@
 % WP calculate potential deaths
 
-function [potential_lifespans_days, potential_lifespans_sess,worms_not_dead] = ...
-    WP_calculate_death(raw_sess_data_aft, raw_sess_data_bef, raw_sess_data_integral,censored_wells,...
+function [potential_lifespans_days, potential_lifespans_sess,worms_not_dead,data_points_to_omit] = ...
+    WP_calculate_death_daily(raw_sess_data_aft, raw_sess_data_bef, raw_sess_data_integral,censored_wells,...
     raw_sess_data_aft_bw,raw_sess_data_bef_bw,...
     export_data,this_exp_num,runoff_cutoff,data_storage,min_activity,sess_activity_buffer,sess_nums,exp_nm,num_days,bw_analysis)
 
@@ -15,6 +15,13 @@ median_norm_data = median(raw_sess_data_integral,2)+1;
 % does not completely mess with the datasets
 median_norm_data2 = median_norm_data;
 median_norm_data2(1:runoff_cutoff)=1;
+
+% find the incorrect data points
+data_points_to_omit = find_badly_registered_sessions(data_storage);
+
+if ~isempty(data_points_to_omit)
+    disp(['Sessions: ' num2str(data_points_to_omit') ' Are badly registered and are skipped']);
+end
 
 % normalize the raw session data to the median to reduce the peak noise
 % from random sessions
@@ -39,6 +46,12 @@ if bw_analysis
         
         this_worm_bw = abs(bw_diff(:,i));
         
+        try
+            this_worm_bw(data_points_to_omit) = 0;
+        catch
+            disp('ererere');
+        end
+        
         this_worm_bw2 = NaN(size(sess_nums));
         for j = 1:length(this_worm_bw)
             [a,b] = find(sess_nums == j);
@@ -56,7 +69,16 @@ if bw_analysis
         end
         
         % find where the frst zero happens
-        this_death_bw = find(this_worm_bw2==0,1,'first');
+        this_death_bw_first = find(this_worm_bw2==0,1,'first');
+        
+        % find where the last non zero happens 
+        this_death_bw_last = find(this_worm_bw2>0,1,'last')+1;
+        
+        if ~isequal(this_death_bw_first,this_death_bw_last)
+            this_death_bw = find(medfilt1(this_worm_bw2,3)==0,1,'first');
+        else
+            this_death_bw = this_death_bw_first;
+        end
         
         % if there is a found zero record its death 
         if ~isempty(this_death_bw)
@@ -156,6 +178,34 @@ catch
     save(char([data_storage '/processed_data/potential_lifespans']),'potential_lifespans_days','potential_lifespans_sess','worms_not_dead','-append')
 end
 
+
+
+end
+
+
+function data_points_to_omit = find_badly_registered_sessions(data_storage)
+
+imgs_path = [data_storage '/processed_data'];
+
+imgs_dir = dir(fullfile(imgs_path,'*.png'));
+
+[Y,ndx,dbg] = natsort({imgs_dir.name});
+
+imgs_dir = imgs_dir(ndx);
+
+for i = 1:length(imgs_dir)
+    
+    A = imread(fullfile(imgs_dir(i).folder,imgs_dir(i).name));
+    
+    b(i) = sum(A(:));
+    
+end
+
+sess_vector = 1:length(imgs_dir);
+
+bad_data = b>(1*10^8);
+
+data_points_to_omit = nonzeros(bad_data.*sess_vector);
 
 
 end

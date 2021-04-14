@@ -21,14 +21,11 @@ close all force hidden
 use_last_experiment_setup = 0;
 % use the last experiment run again
 
-num_divisions_per_plate = 2;
-% if there are multiple divisions on the same plate (ex: gls130 and N2)
-% then this will automatically separate the plates into different
-% specifications after exporting from the WP_function
-% 1 - each plate is a single experiemtn 
-% 2 - each plate is divided in half (1:2)
-% 4 - each plate is divided into quarters   (1:3)
-%                                           (2:4)
+make_new_censors_and_divisions = 0;
+% this will create a new manual censors and divisions that the user specifies
+% 1 - normal make a unique censor 
+% 0 - testing, use previous censor 
+% if no censor exists or can be found a new one must be made
 
 compute_new_zstack_data = 1;
 % this will create new zstack data that will be used for the final data
@@ -43,18 +40,8 @@ skip_data_processing = 0;
 % 0 - normal, keep analysis on
 % 1 - testing, skip the analysis step (speeds up testing)
 
-make_new_censors_and_divisions = 0;
-% this will create a new manual censors and divisions that the user specifies
-% 1 - normal make a unique censor 
-% 0 - testing, use previous censor 
-% if no censor exists or can be found a new one must be made
-
 skip_nn_runoff = 0;
 % skip the neural network runoff in case it was already done
-
-ROI_refrence_path = [pwd '/ROI_mini.mat'];
-% this should be the same path that was used in WPdata, this points towards
-% the previous "base" ROIs
 
 reduce_final_noise = 1;
 % this uses the completed zstacks to get rid of a most of the extra noise
@@ -68,21 +55,6 @@ save_data = 1;
 % on 1
 % 1 - save data
 % 0 - do not save data (for testing purposes only)
-
-runoff_cutoff = 0;
-% depreciated runoff measurement
-% session to determine if a worm is present in the well
-% this is a scalar from session 1 to the number of sessions
-% if 0 is chosen then the max activity of all the worms will be used
-% 0 - max activity
-% # - specific chosen session
-
-min_activity = 750;
-% this value is only necessary if bw_analysis = 0
-% minimun activity that needs to be present to threshold as a movement
-% lower is more sensitive 
-% higher reduces noise more
-% 500 - normal
 
 bw_analysis = 1;
 % use the binary classification of the zstack images 
@@ -100,9 +72,52 @@ sess_activity_buffer=1;
 % then its probably dead
 % the noise needs to be figured out though
 
+export_data = 1;
+% all 'potential_lifespans' are saved as a .mat file regardless
+% but if you want to export this as a .csv file then it will do this 
+% 1 - export as .csv and as .mat
+% 0 - just export as a .mat
+
+final_data_export_path = '/groups/sutphin/_Data';
+
+start_sess = 1;
+% Specifies what day the zstacks sould start being created on
+% useful if continuing an experimnt
+% 1 - start on day 1 (default)
+% other - start on selected day
+
+min_activity = 750;
+% depreciated 
+% this value is only necessary if bw_analysis = 0
+% minimun activity that needs to be present to threshold as a movement
+% lower is more sensitive 
+% higher reduces noise more
+% 500 - normal
+
+runoff_cutoff = 0;
+% depreciated runoff measurement
+% session to determine if a worm is present in the well
+% this is a scalar from session 1 to the number of sessions
+% if 0 is chosen then the max activity of all the worms will be used
+% 0 - max activity
+% # - specific chosen session
+
 num_pics_per_session = 25;
 % this variable is depreciated, but a good reminder to make sure the amount
 % of images is constant between every system
+
+num_divisions_per_plate = 2;
+% if there are multiple divisions on the same plate (ex: gls130 and N2)
+% then this will automatically separate the plates into different
+% specifications after exporting from the WP_function
+% 1 - each plate is a single experiemtn 
+% 2 - each plate is divided in half (1:2)
+% 4 - each plate is divided into quarters   (1:3)
+%                                           (2:4)
+
+ROI_refrence_path = [pwd '/ROI_mini.mat'];
+% this should be the same path that was used in WPdata, this points towards
+% the previous "base" ROIs
 
 amount_of_smoothing = 0.3;
 % This is for the post-processing step that takes very noisy image data
@@ -128,20 +143,6 @@ dont_align_images = 0;
 % and only a test section is being processed, keep on 0
 % 0 - align images (slow and accurate)
 % 1 - no alignment (fast and inaccurate)
-
-export_data = 1;
-% all 'potential_lifespans' are saved as a .mat file regardless
-% but if you want to export this as a .csv file then it will do this 
-% 1 - export as .csv and as .mat
-% 0 - just export as a .mat
-
-final_data_export_path = '/groups/sutphin/_Data';
-
-start_sess = 1;
-% Specifies what day the zstacks sould start being created on
-% useful if continuing an experimnt
-% 1 - start on day 1 (default)
-% other - start on selected day
 
 save_aligned_images = 0;
 % this will generate a huge amount of data
@@ -319,7 +320,7 @@ for i = 1:number_of_plates
     end
     
     
-    [potential_lifespans_days{i}, potential_lifespans_sess{i},worms_not_dead{i}] = ...
+    [potential_lifespans_days{i}, potential_lifespans_sess{i},worms_not_dead{i},data_points_to_omit{i}] = ...
         WP_calculate_death_daily...
         (raw_sess_data_aft{i}, raw_sess_data_bef{i}, ...
         raw_sess_data_integral{i},censored_wells_manual{i},...
@@ -338,28 +339,33 @@ for i = 1:number_of_plates
     
     [potential_lifespans_days{i}, potential_lifespans_sess{i},worms_not_dead{i},potential_healthspans_days{i}] = ...
         WP_recalculate_death_daily...
-        (data_storage{i},exp_nm{i},sess_nums{i},final_data_export_path,full_exp_name,worms_not_dead{i});
+        (data_storage{i},exp_nm{i},sess_nums{i},final_data_export_path,full_exp_name,worms_not_dead{i},data_points_to_omit{i});
     
     temp_cen = (censored_wells_runoff_var{i}|censored_wells_runoff_nn{i});
     
     WP_export_whole_plate_data_daily(export_data,temp_cen,data_storage{i},...
-        exp_nm{i},i,sess_nums{i},num_days{i},final_data_export_path,full_exp_name)
+        exp_nm{i},i,sess_nums{i},num_days{i},final_data_export_path,full_exp_name,data_points_to_omit{i})
     
     
 end
 
 for i = 1:length(censored_wells_runoff_nn)
-    censored_wells_any{i} = (censored_wells_manual{i}|censored_wells_runoff_nn{i}|censored_wells_runoff_var{i});
+    censored_wells_any{i} = (censored_wells_manual{i}|censored_wells_runoff_nn{i}|...
+        censored_wells_runoff_var{i}|censored_wells2{i});
 end
 
+group_similar_data = 1;
+use_ecdf = 0;
+%Empirical cumulative distribution function
+
 plot_WP_data(data_storage,censored_wells_any,potential_lifespans_days,...
-    potential_lifespans_sess,potential_healthspans_days,final_data_export_path,full_exp_name,sess_nums)
+    potential_lifespans_sess,potential_healthspans_days,final_data_export_path,full_exp_name,sess_nums,group_similar_data,use_ecdf)
 
 
 % export final to csv
 WP_final_data_export2(exp_nm,data_storage,potential_lifespans_days,potential_healthspans_days,...
     censored_wells_manual,censored_wells_runoff_nn,censored_wells_runoff_var,worms_not_dead,...
-    final_data_export_path,full_exp_name,any_nn_activity)
+    final_data_export_path,full_exp_name,any_nn_activity,censored_wells2)
 
 
 

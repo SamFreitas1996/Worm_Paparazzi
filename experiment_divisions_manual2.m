@@ -1,8 +1,21 @@
 
 
 function experiment_divisions_manual2(exp_dir,newROIs,data_storage,exp_nm)
+% load in peaks data
+save_peaks_name = [data_storage 'raw_data/peaks.mat'];
+load(char(save_peaks_name))
+% find session numbers
+k=0;
+for i = 1:length(nonzeros(sum(locs,2)))
+    for j = 1:length(nonzeros(sum(locs)))
+        if ~isempty(newROIs{i,j})
+            k=k+1;
+            sess_nums(i,j) = k;
+        end
+    end
+end
 
-
+% choose the first day to load
 day_to_load=round(length(exp_dir));
 temp_dirstep=dir([exp_dir(day_to_load).folder '/' exp_dir(day_to_load).name]);
 temp_dirstep(ismember( {temp_dirstep.name}, {'.', '..'})) = [];  %remove . and ..
@@ -10,6 +23,38 @@ temp_dirstep(ismember( {temp_dirstep.name}, {'.', '..'})) = [];  %remove . and .
 first_image = imread([temp_dirstep(1).folder '/' temp_dirstep(15).name]);
 
 ROI_overlay=newROIs{day_to_load,1};
+
+unique_overlay_template = [0:1:240]';
+unique_overlay_vector = unique(ROI_overlay);
+if ~isequal(unique_overlay_vector,unique_overlay_template)
+    disp('bad session chosen, picking a new one')
+    
+    first_column_sessions = sess_nums(:,1);
+    
+    for i = length(first_column_sessions):-1:1
+        [a,b] = find(first_column_sessions == first_column_sessions(i));
+        
+        unique_overlay_vector = unique(newROIs{a,b});
+        
+        if isequal(unique_overlay_vector,unique_overlay_template)
+            disp(['Session: ' num2str(first_column_sessions(i)) ' found to be good']);
+            ROI_overlay=newROIs{i,1};
+            
+            day_to_load = i;
+            
+            temp_dirstep=dir([exp_dir(day_to_load).folder '/' exp_dir(day_to_load).name]);
+            temp_dirstep(ismember( {temp_dirstep.name}, {'.', '..'})) = [];  %remove . and ..
+            
+            first_image = imread([temp_dirstep(1).folder '/' temp_dirstep(15).name]);
+            
+            break
+        end
+        
+    end
+    
+end
+
+clear unique_overlay_template unique_overlay_vector first_sessions a b first_sessions
 
 output_cells = cell(240,3);
 header = ["Well Location","Dosage","Strain"];
