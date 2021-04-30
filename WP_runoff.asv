@@ -1,0 +1,104 @@
+
+function [potential_runaway,censored_wells_runoff] = WP_runoff(data_storage,exp_nm,potential_lifespans_days, potential_lifespans_sess,censored_wells)
+
+
+% % % load('setup_testing.mat')
+load([data_storage 'processed_data/norm_activity.mat']);
+load([data_storage 'processed_data/potential_lifespans.mat']);
+
+
+% load in session information 
+sess_diff = raw_sess_data_aft - raw_sess_data_bef;
+
+sess_diff = abs(raw_sess_data_aft_bw - raw_sess_data_bef_bw);
+
+num_sess = length(median_norm_data2);
+
+pot_death = zeros(1,240);
+potential_runaway = zeros(1,240);
+% go through every worm and calculate a running variance 
+for i = 1:240
+    
+    x = 1:num_sess;
+    
+    thisWorm = sess_diff(:,i);%.*(sess_diff(:,i)>0);
+        
+%     for j = 2:length(thisWorm)-3
+%         if thisWorm(j-1)==0 && thisWorm(j+1)==0
+%             thisWorm(j) = 0;
+%         elseif thisWorm(j-1)==0 && thisWorm(j+2)==0
+%             thisWorm(j) = 0;
+% %         elseif thisWorm(j-1)==0 && thisWorm(j+3)==0
+% %             thisWorm(j) = 0;
+%         end
+%     end
+%     if thisWorm(end-1)==0 && thisWorm(end)>0
+%         thisWorm(end) = 0;
+%     elseif thisWorm(end-1)>0 && thisWorm(end)==0
+%         thisWorm(end-1) = 0;
+%     elseif thisWorm(end-2)==0 && thisWorm(end)>0
+%         thisWorm(end-1:end) = 0;
+%     elseif thisWorm(end-3)==0 && thisWorm(end)>0
+%         thisWorm(end-2:end) = 0;
+%     end
+%     
+%     try
+%         pot_death(i) = find(thisWorm >= 1, 1, 'first');
+%     catch
+%         try
+%             pot_death(i) = find(raw_sess_data_integral(:,i) >= 750, 1, 'first');
+%         catch
+%             pot_death(i) = 0;
+% % % % %             disp(['Worm data weird on: ' num2str(i)])
+%         end
+%     end
+
+    pot_death = potential_lifespans_sess(i);
+    if pot_death
+        thisWorm(pot_death:end)=0;
+    else
+        thisWorm(1:end)=0;
+    end
+    % calculate the moving variance 
+    thisMoveVar = movvar(thisWorm,3);
+    
+    % find the index of the max
+    [~,varIdx] = max(thisMoveVar);
+    
+%     if varIdx < 3
+%         varIdx = pot_death(i);
+%     end
+    
+    if pot_death
+    if pot_death<(num_sess/2)
+    
+        if abs(varIdx - pot_death) <= 3
+            
+            
+%             subplot(2,1,1)
+%             plot(x,thisMoveVar/max(thisMoveVar),'r',x,thisWorm/max(thisWorm),'b',varIdx,thisMoveVar(varIdx)/max(thisMoveVar),'r*',pot_death,thisWorm(pot_death)/max(thisWorm),'b*')
+%             title({['Worm: ' num2str(i)],['maxVar: ' num2str(varIdx) ' - death: ' num2str(pot_death)]})
+%             subplot(2,1,2)
+%             plot(sess_diff(:,i))
+            potential_runaway(i) = 1;
+            
+            % run neural network here
+            
+        end
+    end
+    end
+end
+
+
+censored_wells_runoff = (censored_wells | potential_runaway);
+
+goodwells = nonzeros( (1:240).*(~censored_wells_runoff));
+
+save(char([data_storage '/processed_data/runoff_worms']),'censored_wells_runoff');
+
+disp([num2str(sum(potential_runaway)) ' worms potentially ran away on ' exp_nm])
+
+
+
+
+end
