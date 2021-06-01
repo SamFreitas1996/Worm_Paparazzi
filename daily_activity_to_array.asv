@@ -1,0 +1,10 @@
+function out_array = daily_activity_to_array(worm_daily_activity)
+
+
+max_days = zeros(1,length(worm_daily_activity));
+
+for i = 1:length(worm_daily_activity)
+    max_days(i) = max(cellfun(@length,worm_daily_activity{i}));
+end
+
+end
