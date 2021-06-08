@@ -18,11 +18,16 @@ for i = 1:length(output_cells)
         this_center = [0,0];
     end
     
+    if sum(this_center < 10) || sum(this_center > 205-10)
+        this_center = [0,0];
+    end
+    
     centers{i} = this_center;
     
 end
 
 centers_reshape = flip(rot90(reshape(centers,[length(sess_nums),240]),3),2);
+zero_zero_scrub_counter = 1;
 
 for i = 1:240
     
@@ -30,9 +35,14 @@ for i = 1:240
     these_centers2 = centers_reshape(i,:);
     zero_idx = zeros(1,length(these_centers));
     for j = 1:length(these_centers)
+        
         if isequal(these_centers{j},[0,0])
-        zero_idx(j) = 1;
+            zero_idx(j) = 1;
+            output2(zero_zero_scrub_counter,6) = 0;
         end
+        
+        zero_zero_scrub_counter = zero_zero_scrub_counter + 1;
+        
     end
     these_centers = these_centers(~zero_idx);
     
@@ -40,7 +50,7 @@ for i = 1:240
     for j = length(these_centers):-1:2
         this_dist = norm(these_centers{j}-these_centers{j-1});
         
-        if this_dist < 25
+        if this_dist < 50
             bad_idx(j) = 1;
         end
         

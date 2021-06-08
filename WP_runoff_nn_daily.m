@@ -1,5 +1,8 @@
 
 function [censored_wells_runoff_var,censored_wells_runoff_nn,potential_healthspans_days,any_nn_activity] = WP_runoff_nn_daily(data_storage,exp_nm,censored_wells,sess_nums,skip_nn_runoff,final_data_export_path,full_exp_name)
+nn_confidence_thresh = 0.5;
+
+disp(['Runoff and health calculations for ' char(exp_nm)])
 
 if ~skip_nn_runoff
     % % % load('setup_testing.mat')
@@ -11,7 +14,6 @@ if ~skip_nn_runoff
     %sess_diff = raw_sess_data_aft - raw_sess_data_bef;
     
     % number_loaded = 5;
-    
     use_daily_inst_of_sess = 1;
     
     if use_daily_inst_of_sess
@@ -28,9 +30,18 @@ if ~skip_nn_runoff
         [~,images] = daysXimgs(1:240,number_loaded,newROIs2,diff_imgs,output_check,exp_nm,sess_nums);
         disp('running neural network')
         % run NN
-        [~,cmdout] = system('python tf2_multithread.py');
-        nnRes = cellfun(@str2double,strsplit(cmdout));
-        nnRes = nnRes(~isnan(nnRes));
+%         [error_message,cmdout] = system('python tf2_multithread.py');
+        [error_message,cmdout] = system('python yolo_test_worm_batching.py');
+        [output] = covert_yolo_csv_to_cell();
+        
+        [output] = filter_nn_output(output,error_message,sess_nums,nn_confidence_thresh);
+        
+        disp('Finished running neural network, exporting data')
+%         nnRes = cellfun(@str2double,strsplit(cmdout));
+%         nnRes = nnRes(~isnan(nnRes));
+        
+        nnRes = output(:,end);
+
         % transform the output into an array
         worms_nn_predicted = flip(rot90(reshape(nnRes,[length(sess_nums),240]),3),2);
         
@@ -63,8 +74,8 @@ end
 
 % take the first 5 sessions and if there are more than 1 worms predicted then it didnt
 % initally run off. otherwise the worm most likely ran off initially
-inital_runoff = logical( sum(worms_nn_predicted(:,1:5)>.75,2) < 2 );
-any_nn_activity = logical(sum(worms_nn_predicted>.75,2));
+inital_runoff = logical( sum(worms_nn_predicted(:,1:5)>nn_confidence_thresh,2) < 2 );
+any_nn_activity = logical(sum(worms_nn_predicted>nn_confidence_thresh,2));
 
 % if there are more than 3 potential healthy days then the worm was present
 % on the plate
@@ -77,7 +88,7 @@ potential_healthspans_days = zeros(1,240);
 for i = 1:240
     % if the worm didnt run initally
     if ~inital_runoff(i)
-        this_nn_predict = worms_nn_predicted(i,:)>.75;
+        this_nn_predict = worms_nn_predicted(i,:)>nn_confidence_thresh;
         
         for j = 2:length(this_nn_predict)-1
             if this_nn_predict(j-1) == 1 && this_nn_predict(j+1) == 1 && this_nn_predict(j) == 0
@@ -87,18 +98,6 @@ for i = 1:240
         
         % filter the data to ommit any outliers
         this_nn_predict = medfilt1(double(this_nn_predict),3);
-        
-        % if there are 10 days in a row with no data then
-        % dont count anything past it
-%         for j = 1:length(this_nn_predict)-11
-%             
-%             % if there are no values then
-%             if (sum(this_nn_predict(j):this_nn_predict(j+10))) == 0
-%                 this_nn_predict(j:end) = 0;
-%                 break
-%             end
-%             
-%         end
         
         % find the last time there is a worm
         this_health = find(this_nn_predict==1,1,'last');
@@ -118,17 +117,18 @@ experimental_runoff = zeros(size(inital_runoff));
 for i = 1:240
     % if the heath and life spans are within a day of eachother than the
     % most ran
-%     if ~inital_runoff(i)
-        if health_life_diff(i) < 1
-            experimental_runoff(i) = 1;
-        end
-%     end
+    if health_life_diff(i) < 1
+        experimental_runoff(i) = 1;
+    end
 end
 experimental_runoff = logical(experimental_runoff);
 
 % result to the init imgs folder
 if ~skip_nn_runoff
-    [~,~] = nnRes_to_img(nnRes,images,240,number_loaded,exp_nm,potential_healthspans_days,inital_runoff,experimental_runoff,final_data_export_path,full_exp_name,worms_nn_predicted,potential_lifespans_days);
+    [~,~] = nnRes_to_img(nnRes,images,240,number_loaded,...
+        exp_nm,potential_healthspans_days,inital_runoff,...
+        experimental_runoff,final_data_export_path,full_exp_name,...
+        worms_nn_predicted,potential_lifespans_days,nn_confidence_thresh,output);
 else
 %     nnRes = reshape(worms_nn_predicted',[length(sess_nums)*240,1]);
 %     [~,~] = nnRes_to_img(nnRes,images,240,number_loaded,exp_nm,potential_healthspans_days,inital_runoff,experimental_runoff,final_data_export_path,full_exp_name);
@@ -241,8 +241,12 @@ parfor j = lowBound:highBound
     catch
         disp(['There was an error creating data on session ' num2str(j)])
         s = regionprops(thisROI==120,'BoundingBox');
-        
-        error_zero_img = zeros(s.BoundingBox(3),s.BoundingBox(4),'uint8');
+        try
+            error_zero_img = zeros(s.BoundingBox(3),s.BoundingBox(4),'uint8');
+        catch
+            s = regionprops(thisROI==115,'BoundingBox');
+            error_zero_img = zeros(s.BoundingBox(3),s.BoundingBox(4),'uint8');
+        end
         
         for i = ROI_nums
             images{i,j} = error_zero_img;
@@ -450,7 +454,11 @@ end
 end
 
 
-function [nnResult_img,large_images] = nnRes_to_img(nnRes,images,num_wells,num_pics,exp_nm,potential_healthspans_days,inital_runoff,experimental_runoff,final_data_export_path,full_exp_name,worms_nn_predicted,potential_lifespans_days)
+function [nnResult_img,large_images] = nnRes_to_img(...
+    nnRes,images,num_wells,num_pics,exp_nm,potential_healthspans_days,...
+    inital_runoff,experimental_runoff,final_data_export_path,...
+    full_exp_name,worms_nn_predicted,potential_lifespans_days,...
+    nn_confidence_thresh,output)
 
 [rows,cols] = size(images);
 
@@ -461,14 +469,19 @@ else
     num_pics = rows/240;
 end
 
-parfor i = 1:length(images)
+for i = 1:length(images)
     
     this_nnRes = nnRes(i);
     
     this_nnRes(:,6:end,:)=[];
     
-    if this_nnRes > .75
+    xywh = [output(i,2:5)];
+    xywh(3) = xywh(3)-xywh(1);
+    xywh(4) = xywh(4)-xywh(2);
+    
+    if this_nnRes > nn_confidence_thresh
         images{i} = insertText(images{i},[150,10],this_nnRes,'BoxColor','green');
+        images{i} = insertShape(images{i},'Rectangle',xywh,'Color','green');
     else
         images{i} = insertText(images{i},[150,10],this_nnRes,'BoxColor','red');
     end
@@ -478,7 +491,7 @@ end
 o=1;
 large_images = cell(1,num_wells);
 
-any_nn_activity = logical(sum(worms_nn_predicted>.75,2));
+any_nn_activity = logical(sum(worms_nn_predicted>nn_confidence_thresh,2));
 
 for i = 1:num_pics:length(images)
     % create large image
@@ -508,7 +521,7 @@ nnResult_img = imtile(large_images,'GridSize',[length(images)/num_pics 1]);
 nnResult_img = im2uint8(nnResult_img);
 
 mkdir([pwd '/init_imgs'])
-imwrite(nnResult_img,[pwd '/init_imgs/' exp_nm '_nn_result.png'])
-imwrite(nnResult_img,[final_data_export_path '/' full_exp_name '/' exp_nm '_nn_result.png']);
+% imwrite(nnResult_img,[pwd '/init_imgs/' exp_nm '_nn_result.jpg'])
+imwrite(nnResult_img,[final_data_export_path '/' full_exp_name '/' exp_nm '_nn_result.jpg']);
 
 end

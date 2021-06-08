@@ -10,10 +10,11 @@ function [zstacks_paths,sess_nums,num_days] = ...
     calculate_optical_flow,...
     save_aligned_images,save_only_few,NoI,NoL,transform,init)
 
-
+% get the experimental directory 
 exp_dir = dir(exp_dir_path);
 exp_dir(ismember( {exp_dir.name}, {'.', '..','raw_data','raw_data.mat'})) = [];  %remove . and ..
 
+% get paths and names
 [exp_fol,exp_nm,~]=fileparts(exp_dir_path);
 data_storage = [exp_fol '/' exp_nm '-data/'];
 regist_storage = [exp_fol '/' exp_nm '-registrations/'];
@@ -69,8 +70,8 @@ sess_counter=1;
 total_num_sessions = sum(sess_per_day(:));
 
 % use the ROIs if avaliable otherwise use the locations 
+% sess nums represents what session goes to what day
 if compute_new_zstack_data
-    
     k=0;
     for i = 1:length(nonzeros(sum(locs,2)))
         for j = 1:length(nonzeros(sum(locs)))
@@ -95,18 +96,18 @@ end
 % load in the censor
 % load(char([data_storage '/raw_data/censor.mat']))
 
-
+% if the saved images are to be stored then make a dir
 if save_aligned_images
-    
     mkdir(regist_storage)
-    
 end
 
-
+% get 3 sessions for the "only save a few" variable choice 
 first_reg   = [1,1];
 middle_reg  = [round(num_days/2),2];
 last_reg    = [num_days,2];
 
+% individualized ROI normalization variable 
+% in here because it shouldnt really be changed but givn the option 
 indiv_ROI_norm = 1;
 
 % reshape the ROI 2D array into a single vectored object array
@@ -123,25 +124,29 @@ end
 clear newROIs
 
 tic
+% parfor loops through all the sessions to make the zstack datas 
 if compute_new_zstack_data
-% %     start_sess = 18;
+%     start_sess = 2;
     %%%%% should be parfor
     parfor i=start_sess:num_sess
         
+        % find which session number is this session 
         [a,b] = find(sess_nums == i);
         
         disp(['Processing data for day' num2str(a) ' session' num2str(b)]);
         
+        % variables to load image data
         temp_dir = daily_dir{a};
         img_idx_aft = (locs(a,b)+1:locs(a,b)+len_k);
         img_idx_bef = img_idx_aft-len_k-1;
-        %disp(['loading data for day' num2str(a) ' session' num2str(b)]);
         
+        % set up overwriteable variables 
         stack_bef=cell(1,len_k);
         stack_aft=cell(1,len_k);
         centroids_bef = cell(1,len_k);
         centroids_aft = cell(1,len_k);
         
+        % load in the image data from each session data 
         for k = 1:len_k
             stack_bef{k} = imread([temp_dir(img_idx_bef(k)).folder '/' temp_dir(img_idx_bef(k)).name]);
             stack_aft{k} = imread([temp_dir(img_idx_aft(k)).folder '/' temp_dir(img_idx_aft(k)).name]);
@@ -166,8 +171,8 @@ if compute_new_zstack_data
         % if you want to align the images
         if ~dont_align_images
             
-            %             first_image = stack_aft{1};
             % register the bef{1} to aft{1}
+            % first use dft registration, and try ecc if that fails 
             try
                 [A]=dtf_reg(stack_bef{1},stack_aft{1},0,0);
             catch
@@ -177,12 +182,10 @@ if compute_new_zstack_data
                     disp(['IMPROPER REGISTRATION ON day' num2str(a) ' session' num2str(b)]);
                 end
             end
-            % filter the final registered image to preserve lines but gt
+            % filter the final registered image to preserve gradients but get
             % rid of background variance
             stack_bef{1}=imbilatfilt(double(A),DoS);
             
-            
-            %disp(['Registering data for day' num2str(a) ' session' num2str(b)]);
             % Register all the images to the base image
             for k =2:len_k
                 % register stack before to stack after
@@ -190,6 +193,7 @@ if compute_new_zstack_data
                     [A]=dtf_reg(stack_bef{k},stack_aft{1},0,0);
                 catch
                     try
+                        % if the first reg fails 
                         [~, ~, A]=ecc(stack_bef{k},stack_aft{1}, NoL, NoI, transform, init);
                         disp(['v2 on stack bef ' num2str([a,b])]);
                     catch
@@ -221,29 +225,35 @@ if compute_new_zstack_data
             stack_aft{1}=imbilatfilt(double(stack_aft{1}),DoS);
             
         else
+            % if no registration is needed (do not use this)
             for k = 1:len_k
                 stack_aft{k} = double(stack_aft{k});
                 stack_bef{k} = double(stack_bef{k});
                 %                 first_image = stack_aft{1};
             end
             
+            A = 0;
+            
         end
-        %disp(['Stacking data for day' num2str(a) ' session' num2str(b)]);
-        
-        % [focus_measure] = WP_measure_focus(stack,rad_pixels,create_figure,title_figure)
 
-        
+        % this is to normalize the individual images to the session means 
         if normalize_intensities
+            % first measure the focus of the image to make sure its 
+            % in focus and usable 
             [fm] = WP_measure_focus([stack_bef stack_aft],0,0,num2str([a,b]));
+            
+            % if there is something wrong 
             if sum(fm<.7) || sum(fm<.7)<10
                 
-                
+                % check for outliers in focus 
                 focus_outliers = isoutlier(fm,'median');
                 check_fm = focus_outliers.*(fm<.7);
                 
+                % if the outlers line up with the unfocused images
                 if sum(check_fm)
                     disp(['Day' num2str(a) ' session' num2str(b) ' --' num2str(sum(fm<.7)) ' images potentially out of focus']);
                     
+                    % replace the out of focus images 
                     focus_bad_images = nonzeros((1:(len_k*2)).*check_fm);
                     for k = 1:length(focus_bad_images)
                         if focus_bad_images(k) > len_k
@@ -268,18 +278,22 @@ if compute_new_zstack_data
                 
             end
             
-            % if there is only one image lower than the .7 focus measure threshold
-            % then fix with a replacement
             
+            % now that the focus issue are resolved 
+            % time to normalize the images to each other 
+            
+            % find the 2nd degree means of the base images 
             ref_bef = mean2(stack_bef{1});
             ref_aft = mean2(stack_aft{1});
+            
             % initalize normalization to the first image mean values
             for k = 2:len_k
                 stack_bef{k} = stack_bef{k}/(mean2(stack_bef{k})/ref_bef);
                 stack_aft{k} = stack_aft{k}/(mean2(stack_aft{k})/ref_aft);
-                
             end
             
+            
+            % individual ROI normalization (intensity equalization) across the 240 wells 
             if indiv_ROI_norm
                 
                 % create a mean image
@@ -296,15 +310,27 @@ if compute_new_zstack_data
                     end
                     scaling_ROI = scaling_ROI + seg_mean*(newROIs2{i}==k);
                 end
+                % get an ROI for scaling the images 
                 scaling_ROI = scaling_ROI/max(scaling_ROI(:));
                 
+                % isolation of the ROIs
+                iso_ROI = (newROIs2{i}>0);
+                
+                % divide by the scaling ROI, moltiply by the isolation ROI
+                % then get rid of all the NaN values and replace them with
+                % 0 doubles 
                 for k = 1:length(stack_aft)
-                    stack_aft{k} = stack_aft{k}.*scaling_ROI;
-                    stack_bef{k} = stack_aft{k}.*scaling_ROI;
+                    stack_aft{k} = (stack_aft{k}./scaling_ROI).*iso_ROI;
+                    stack_aft{k}(isnan(stack_aft{k})) = 0;
+% % % %                     stack_bef{k} = stack_aft{k}.*scaling_ROI;
+                    stack_bef{k} = (stack_bef{k}./scaling_ROI).*iso_ROI;
+                    stack_bef{k}(isnan(stack_bef{k})) = 0;
                 end
             end
             
         end
+        
+        % now that normalization is done time to create the zstacks 
         
         % create the first and last images for saving
         first_image = stack_bef{1};
@@ -318,9 +344,7 @@ if compute_new_zstack_data
         
         zstack_aft=(zeros(size(stack_aft{1})));
         zstack_bef=(zeros(size(stack_aft{1})));
-        
-        H = fspecial('disk',50);
-        
+                
         for k = 1:len_k
             % remove median of the image stack
             temp1 = (stack_aft{k}) - median_img_aft*(1.1);
@@ -335,6 +359,7 @@ if compute_new_zstack_data
                 temp2(temp2<1)=0;
             end
             
+            % slight area filtering 
             temp1 = temp1.*(bwareaopen(temp1>1,25,4));
             temp2 = temp2.*(bwareaopen(temp2>1,25,4));
                         
@@ -374,15 +399,17 @@ if compute_new_zstack_data
         
     end
     
-    toc
+    
 else
+    % if you dont need new zstacks then
+    % just load some variables 
     for i=start_sess:num_sess
         [a,b] = find(sess_nums == i);
         save_name = [data_storage 'raw_data/day' num2str(a) '_session' num2str(b) '.mat'];
         zstacks_paths{i} = save_name;
     end
 end
-
+toc
 
 end
 

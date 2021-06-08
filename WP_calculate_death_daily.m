@@ -1,10 +1,11 @@
 % WP calculate potential deaths
 
-function [potential_lifespans_days, potential_lifespans_sess,worms_not_dead,data_points_to_omit] = ...
+function [potential_lifespans_days, potential_lifespans_sess,worms_not_dead,data_points_to_omit,worm_daily_activity] = ...
     WP_calculate_death_daily(raw_sess_data_aft, raw_sess_data_bef, raw_sess_data_integral,censored_wells,...
     raw_sess_data_aft_bw,raw_sess_data_bef_bw,...
-    export_data,this_exp_num,runoff_cutoff,data_storage,min_activity,sess_activity_buffer,sess_nums,exp_nm,num_days,bw_analysis)
-
+    export_data,this_exp_num,runoff_cutoff,...
+    data_storage,min_activity,sess_activity_buffer,...
+    sess_nums,exp_nm,num_days,bw_analysis,ignore_badly_registered_sessions,final_data_export_path,full_exp_name)
 
 % find the median activity number for every day
 % it should be zero for any day without noise and that is after the
@@ -17,7 +18,11 @@ median_norm_data2 = median_norm_data;
 median_norm_data2(1:runoff_cutoff)=1;
 
 % find the incorrect data points
-data_points_to_omit = find_badly_registered_sessions(data_storage);
+if ~ignore_badly_registered_sessions
+    data_points_to_omit = find_badly_registered_sessions(data_storage);
+else
+    data_points_to_omit = [];
+end
 
 if ~isempty(data_points_to_omit)
     disp(['Sessions: ' num2str(data_points_to_omit') ' Are badly registered and are skipped']);
@@ -27,6 +32,7 @@ end
 % from random sessions
 raw_norm_curves = raw_sess_data_integral./repmat(median_norm_data2,1,240);
 
+% save the raw data 
 save(char([data_storage '/processed_data/norm_activity']),'raw_sess_data_integral','raw_sess_data_bef','raw_sess_data_aft','raw_norm_curves','median_norm_data2','censored_wells','raw_sess_data_aft_bw','raw_sess_data_bef_bw')
 
 % initalize variables
@@ -35,6 +41,8 @@ save(char([data_storage '/processed_data/norm_activity']),'raw_sess_data_integra
 
 potential_lifespans_days=(zeros(1,240));
 potential_lifespans_sess=(zeros(1,240));
+
+worm_daily_activity = cell(1,length(sess_nums));
 
 worms_not_dead = (zeros(1,240));
 
@@ -67,6 +75,8 @@ if bw_analysis
             end
             
         end
+        
+        worm_daily_activity{i} = this_worm_bw2;
         
         % find where the frst zero happens
         this_death_bw_first = find(this_worm_bw2==0,1,'first');
@@ -178,6 +188,15 @@ catch
     save(char([data_storage '/processed_data/potential_lifespans']),'potential_lifespans_days','potential_lifespans_sess','worms_not_dead','-append')
 end
 
+[~,exp_nm,~]=fileparts(data_storage(1:length(data_storage)-1));
+f_out = fullfile(final_data_export_path,full_exp_name,[exp_nm '.mat']);
+try 
+    save(char([data_storage '/processed_data/norm_activity']),'worm_daily_activity','-append')
+    save(char(f_out),'worm_daily_activity','-append')
+catch
+    save(char([data_storage '/processed_data/norm_activity']),'raw_sess_data_integral','raw_sess_data_bef','raw_sess_data_aft','raw_norm_curves','median_norm_data2','censored_wells','raw_sess_data_aft_bw','raw_sess_data_bef_bw','worm_daily_activity')
+    save(char(f_out),'worm_daily_activity','-append')
+end
 
 
 end
@@ -189,7 +208,7 @@ imgs_path = [data_storage '/processed_data'];
 
 imgs_dir = dir(fullfile(imgs_path,'*.png'));
 
-[Y,ndx,dbg] = natsort({imgs_dir.name});
+[~,ndx,~] = natsort({imgs_dir.name});
 
 imgs_dir = imgs_dir(ndx);
 
@@ -203,7 +222,7 @@ end
 
 sess_vector = 1:length(imgs_dir);
 
-bad_data = b>(1*10^8);
+bad_data = b>(1*10^9);
 
 data_points_to_omit = nonzeros(bad_data.*sess_vector);
 

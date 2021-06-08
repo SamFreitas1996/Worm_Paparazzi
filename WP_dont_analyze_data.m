@@ -1,6 +1,7 @@
 function [raw_sess_data_aft, raw_sess_data_bef, raw_sess_data_integral,censored_wells2,runoff_cutoff2,raw_sess_data_aft_bw,raw_sess_data_bef_bw] = ...
     WP_dont_analyze_data(data_storage,final_data_export_path,full_exp_name,runoff_cutoff) 
 
+% load all the data instead of reprocessing it
 censored_wells2 = zeros(1,240);
 try
 data_temp = load(fullfile(data_storage,'processed_data','norm_activity'));

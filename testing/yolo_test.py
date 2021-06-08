@@ -34,7 +34,7 @@ for filename in img_file_paths: #assuming gif
     im=Image.open(filename)
     imgs.append(im)
 
-model.conf = 0.5
+model.conf = 0.6
 
 elapsed = time.time() - t
 print('image reading:', elapsed)

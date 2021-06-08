@@ -76,54 +76,6 @@ if export_data
         
     end
     
-%     h=figure(this_exp_num);
-%     
-%     imshow(life_curve_picture,[]);
-%     c= colorbar('TickLabels',{'Low','High'},'Ticks',[min(life_curve_picture(:)),max(life_curve_picture(:))]);
-%     c.Label.String = {'Activity per session for each worm'; ' '; 'Red dot indicates day of death';' ';'Green dot indicates end of health'};
-%     xlabel({'Days on robot'; ' ' ;['Median lifespan - ' num2str(median(nonzeros(potential_lifespans_days_runoff)))] });
-%     ylabel('worms sorted by lifespan');
-%     title([exp_nm ' processed on: ' date], 'interpreter','none')
-%     
-%     hold on
-%     for i=1:length(worm_well_number_lifespan)
-%         
-%         plot(potential_lifespans_sess_runoff(worm_well_number_lifespan(i)),i,'ro')
-%         plot(potential_healthspans_days_runoff(worm_well_number_lifespan(i)),i,'go')
-%         
-%     end
-% 
-%     ticks_labels = string([1:10:num_days]);
-%     axis on
-%     set(gca,'XTick',[1:10:num_days])
-%     set(gca,'YTick',[1:10:length(life_curve_picture(:,1))])
-%     set(h, 'Position', get(0, 'Screensize'));
-%     
-%     hold off
-%     h=figure(this_exp_num);
-%     
-%     imshow(life_curve_picture,[]);
-%     c= colorbar('TickLabels',{'Low','High'},'Ticks',[min(life_curve_picture(:)),max(life_curve_picture(:))]);
-%     c.Label.String = {'Activity per session for each worm'; ' '; 'Red dot indicates day of death';' ';'Green dot indicates end of health'};
-%     xlabel({'Days on robot'; ' ' ;['Median lifespan - ' num2str(median(nonzeros(potential_lifespans_days_runoff)))] });
-%     ylabel('worms sorted by lifespan');
-%     title([exp_nm ' processed on: ' date], 'interpreter','none')
-%     
-%     hold on
-%     for i=1:length(worm_well_number_lifespan)
-%         
-%         plot(potential_lifespans_sess_runoff(worm_well_number_lifespan(i)),i,'ro')
-%         plot(potential_healthspans_days_runoff(worm_well_number_lifespan(i)),i,'go')
-%         
-%     end
-% 
-%     ticks_labels = string([1:10:num_days]);
-%     axis on
-%     set(gca,'XTick',[1:10:num_days])
-%     set(gca,'YTick',[1:10:length(life_curve_picture(:,1))])
-%     set(h, 'Position', get(0, 'Screensize'));
-%     
-%     hold off
     h=figure(this_exp_num);
     subplot(1,2,1)
     imshow(life_curve_picture,[]);

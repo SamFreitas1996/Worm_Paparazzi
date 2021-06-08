@@ -21,7 +21,7 @@ close all force hidden
 use_last_experiment_setup = 0;
 % use the last experiment run again
 
-make_new_censors_and_divisions = 0;
+make_new_censors_and_divisions = 1;
 % this will create a new manual censors and divisions that the user specifies
 % 1 - normal make a unique censor 
 % 0 - testing, use previous censor 
@@ -354,7 +354,7 @@ for i = 1:number_of_plates
         WP_runoff_nn_daily...
         (data_storage{i},exp_nm{i},censored_wells_manual{i},sess_nums{i},skip_nn_runoff,final_data_export_path,full_exp_name);
     
-    [potential_lifespans_days{i}, potential_lifespans_sess{i},worms_not_dead{i},potential_healthspans_days{i}] = ...
+    [potential_lifespans_days{i}, potential_lifespans_sess{i},worms_not_dead{i},potential_healthspans_days{i},worm_unresponsive_to_stimulus{i}] = ...
         WP_recalculate_death_daily...
         (data_storage{i},exp_nm{i},sess_nums{i},final_data_export_path,full_exp_name,worms_not_dead{i},data_points_to_omit{i});
     
@@ -389,7 +389,7 @@ close all
 % export final to csv
 WP_final_data_export2(exp_nm,data_storage,potential_lifespans_days,potential_healthspans_days,...
     censored_wells_manual,censored_wells_runoff_nn,censored_wells_runoff_var,worms_not_dead,...
-    final_data_export_path,full_exp_name,any_nn_activity,censored_wells2,worm_daily_activity)
+    final_data_export_path,full_exp_name,any_nn_activity,censored_wells2,worm_daily_activity,worm_unresponsive_to_stimulus)
 
 
 

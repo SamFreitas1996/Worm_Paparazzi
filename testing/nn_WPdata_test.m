@@ -96,12 +96,14 @@ for o = 1:length(exp_dir_path)
     % Open the folder and find each specific day - natsort
     exp_folder_struct=dir(this_experiment_folder);
     exp_folder_struct(ismember( {exp_folder_struct.name}, {'.', '..','raw_data','raw_data.mat'})) = [];  %remove . and ..
+    not_dir_idx = 1:length(exp_folder_struct);
     for i = 1:length(exp_folder_struct)
         if exp_folder_struct(i).isdir==false
-            exp_folder_struct(i)=[];
+            not_dir_idx(i) = 0;
             % get rid of everything in the struct that isnt a folder
         end
     end
+    exp_folder_struct = exp_folder_struct(nonzeros(not_dir_idx));
     
     % create a new folder that will be the storage place for all 'raw-data'
     mkdir(data_storage, 'raw_data');
@@ -235,74 +237,6 @@ for o = 1:length(exp_dir_path)
         end
     end
     
-    %     k = 1;
-    %     for i = 1:length(stack2)
-    %
-    %         [a,b] = find(sess_nums == i);
-    %
-    %         this_data = this_data_all{i};
-    %
-    %         % if there are less than 240 data points
-    %         if (length(this_data)<240)
-    %             [ROI_grid] = try_grid_fit(this_data(:,1),this_data(:,2),w,h);
-    %
-    %             x = ROI_grid(:,1);
-    %             y = ROI_grid(:,2);
-    %
-    %         % if there are more than 240 data points
-    %         elseif (length(this_data)>240)
-    %             this_data2 = this_data;
-    %
-    %             ROI_width_data = this_data(:,3:4);
-    %
-    %             for j = 1:length(ROI_width_data)
-    %                 if sum(ROI_width_data(j,:))<370
-    %                     this_data2(j,:) = [];
-    %                 end
-    %             end
-    %
-    %             while(~isequal(length(this_data2),240))
-    %
-    %                 for j = 1:length(this_data2)
-    %                     distances = sqrt(sum(bsxfun(@minus, this_data2, this_data2(j,:)).^2,2));
-    %                     distances(j) = 1000;
-    %                     if sum(distances<200)
-    %
-    %                         this_idx = find(distances<200,1,'first');
-    %
-    %                         this_data2(j,:) = mean([this_data2(j,:);this_data2(this_idx,:)]);
-    %                         this_data2(this_idx,:) = [];
-    %
-    %                         if length(this_data2) == 240
-    %                             break
-    %                         end
-    %
-    %                     end
-    %
-    %                 end
-    %
-    %             end
-    %
-    %             x = this_data2(:,1);
-    %             y = this_data2(:,2);
-    %         % if there are 240 data points
-    %         else
-    %             x = this_data(:,1);
-    %             y = this_data(:,2);
-    %
-    %         end
-    %
-    %         [thisROI,sess_is_bad] = gen_roi_from_nn_data(x,y,w,h);
-    %
-    %         if sess_is_bad
-    %             potential_bad_ROIs(k) = i;
-    %             k=k+1;
-    %         end
-    %
-    %         newROIs{a,b} = thisROI;
-    %
-    %     end
-    %
     clear potential_bad_ROIs
     
     
@@ -326,6 +260,11 @@ for o = 1:length(exp_dir_path)
             [thisROI,sess_is_bad] = gen_roi_from_nn_data(x,y,w,h);
             
             if sess_is_bad
+                potential_bad_ROIs(k) = i;
+                k=k+1;
+            end
+            
+            if ~isequal(size(thisROI),size(stack2{i}))
                 potential_bad_ROIs(k) = i;
                 k=k+1;
             end
@@ -383,7 +322,7 @@ for o = 1:length(exp_dir_path)
     
     this_test = sort([1,randi(num_sess,1,4),max(sess_nums(:))],'ascend');
     
-    figure;
+    figure('units','normalized','outerposition',[0 0 1 1]);
     
     for i = 1:6
         [a,b] = find(sess_nums==this_test(i));
@@ -392,6 +331,8 @@ for o = 1:length(exp_dir_path)
         imshow(double(stack{a,b}).*(newROIs{a,b}>0),[]);
         title(['New ROI example: ' num2str(i) ' day-' num2str(a) '-sess-' num2str(b)]);
     end
+    
+    drawnow
     
     % if ~isempty(newROIs{end,end})
     %     imshow(double(stack{end,end}).*(newROIs{end,end}>0),[]);
@@ -448,8 +389,10 @@ parfor i = 1:length(exp_dir)
         catch
             if overwrite_bad_images
                 disp(['file ' temp_folder(ii).folder '/' temp_folder(ii).name ' corrupted'])
-                imwrite(imread([temp_folder(ii).folder '/' temp_folder(ii-1).name]), [temp_folder(ii).folder '/' temp_folder(ii).name])
+                temp_img = imread([temp_folder(ii).folder '/' temp_folder(ii-1).name]);
+                imwrite(temp_img, [temp_folder(ii).folder '/' temp_folder(ii).name])
             else
+                temp_img = 0;
                 disp('More than one image in a row corrupted')
                 error([temp_folder(ii).folder '/' temp_folder(ii).name]);
             end
@@ -466,6 +409,22 @@ parfor i = 1:length(exp_dir)
     % If they are brighter than theyre the middle excitation light
     % can adjust values if this messes up so it does work
     [pks_temp,locs_temp]=findpeaks(sums,'MinPeakDistance',10,'Threshold',10000000);
+    
+    if isempty(locs_temp)
+        disp([temp_folder(1).folder ' - Has no excitation light, using assumed spots'])
+        
+        switch length(temp_folder)
+            case 25
+                locs_temp = 13;
+            case 50
+                locs_temp = [13, 38];
+            case 75
+                locs_temp = [13, 38, 63];
+        end
+        
+        pks_temp = ones(size(locs_temp));
+        
+    end
     
     % check to make sure the correct number of images are in the folder
     if rem(length(temp_folder),25)
@@ -499,7 +458,7 @@ parfor i = 1:length(exp_dir)
     elseif length(pks_temp)==2
         
         pks_temp = [pks_temp 0 0];
-        locs_temp = [locs_temp 0 0]
+        locs_temp = [locs_temp 0 0];
         
     elseif length(pks_temp)==3
         

@@ -70,6 +70,9 @@ end
 % generally the robot is overshooting not undershooting 
 % undershooting also needs to be fixed
 thisROI = zeros(size(first_good_ROI));
+
+[w,h] = size(first_good_ROI);
+
 for i = 1:length(cols)
     
     this_col = cols{i};
@@ -83,14 +86,25 @@ for i = 1:length(cols)
     for j = length(this_col):-1:1
         
         try
+            
+            too_long_error = 0;
+            
             x_box = round(this_col(j,1)-102:this_col(j,1)+102);
             y_box = round(this_col(j,2)-102:this_col(j,2)+102);
+            
+            if sum(y_box>w) || sum(x_box>h)
+                too_long_error = 1;
+                error()
+            end
             
             thisROI(y_box,x_box) = k;
             
             k=k-1;
 
         catch
+            if too_long_error
+                k=k-1;
+            end
             
         end
 
@@ -99,7 +113,13 @@ for i = 1:length(cols)
 end
 
 
-
+if ~isequal(size(thisROI),size(first_good_ROI))
+    
+    disp('Size mismatch')
+    
+    thisROI = thisROI(1:w,1:h);
+    
+end
 
 fixed_ROI = thisROI;
 

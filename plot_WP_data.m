@@ -1,18 +1,19 @@
 function plot_WP_data(data_storage,censored_wells_any,potential_lifespans_days,...
-    potential_lifespans_sess,potential_healthspans_days,final_data_export_path,full_exp_name,sess_nums,group_similar_data,use_ecdf)
+    potential_lifespans_sess,potential_healthspans_days,final_data_export_path,...
+    full_exp_name,sess_nums,group_similar_data,use_ecdf,add_control_to_everything,worm_daily_activity)
 
 % Separate divisions out
 [sep_exps_days,sep_exps_sess,sep_exps_days_health,sep_nms_full,censored_wells_any_separated,sep_well_locations,...
-    dosage_names,strain_names] = ...
+    dosage_names,strain_names,activities_full] = ...
     separate_divisions(data_storage,censored_wells_any,potential_lifespans_days,...
-    potential_lifespans_sess,potential_healthspans_days);
+    potential_lifespans_sess,potential_healthspans_days,worm_daily_activity);
 
 
 if group_similar_data
     
     disp('Grouping seperate plate data together with the same name')
     
-    sep_nms_unique = unique(sep_nms_full);
+    sep_nms_unique = natsort(unique(sep_nms_full));
     
     temp_sep_exps_days = cell(1,length(sep_nms_unique));
     temp_sep_exps_sess = cell(1,length(sep_nms_unique));
@@ -68,12 +69,14 @@ for i = 1:number_of_experiments
     
     stepsize = 1:(max(sep_exps_days{i})+1);
     
+    good_idx{i} = remove_bad_days(sep_exps_days{i});
+    
     worms_remaining{2,i} = stepsize;
     
     %     this_lifespan = sep_exps_days{i};
     
     if use_ecdf
-        [this_survival_curve,x] = ecdf(sep_exps_days{i},'censoring',censored_wells_any_separated{i},'function','survivor');
+        [this_survival_curve,x] = ecdf(sep_exps_days{i}(good_idx{i}),'censoring',censored_wells_any_separated{i}(good_idx{i}),'function','survivor');
         
         plot(x,this_survival_curve,...
             'LineStyle','-','LineWidth',1,...
@@ -134,7 +137,7 @@ for i = 1:number_of_experiments
     
     %     this_healthspan = sep_exps_days_health{i};
     if use_ecdf
-        [this_survival_curve,x] = ecdf(sep_exps_days_health{i},'censoring',censored_wells_any_separated{i},'function','survivor');
+        [this_survival_curve,x] = ecdf(sep_exps_days_health{i}(good_idx{i}),'censoring',censored_wells_any_separated{i}(good_idx{i}),'function','survivor');
         
         plot(x,this_survival_curve,...
             'LineStyle','-','LineWidth',1,...
@@ -176,10 +179,24 @@ if group_similar_data
     
     mkdir(fullfile(final_data_export_path,full_exp_name,'groupings'));
     
-    groupings = [cellstr(dosage_names);cellstr(strain_names)];
+    try
+        groupings = cellstr([dosage_names strain_names]);
+    catch
+        groupings = cellstr([dosage_names; strain_names]);
+    end
     
+    n=1;
     for k = 1:length(groupings)
-        groupings_save_name{k} = strrep(groupings{k},'/','_');
+        A = strsplit(groupings{k},' ');
+        for m = 1:length(A)
+            sub_groups{n} = A{m};
+            n=n+1;
+        end
+    end
+    sub_groups = unique(string(sub_groups));
+    
+    for k = 1:length(sub_groups)
+        groupings_save_name{k} = strrep(sub_groups{k},'/','_');
     end
     % group by dosage
     
@@ -187,7 +204,8 @@ if group_similar_data
     
 %     groupings = cellstr(strain_names);
     
-    for k = 1:length(groupings)
+%     for k = 1:length(groupings)
+    for k = 1:length(sub_groups)
         
         this_grouping = zeros(1,length(sep_nms_full));
         
@@ -195,18 +213,48 @@ if group_similar_data
             
             str_split_nms = split(sep_nms_full{m}, ' - ');
             
+            p = 1;
             for n = 1:length(str_split_nms)
-                this_grouping(m) = strcmp(str_split_nms{n},groupings{k});
+                temp_split = strsplit(str_split_nms{n},' ');
+                for o = 1:length(temp_split)
+                    str_split_nms_sub{p} = temp_split{o};
+                    p=p+1;
+                end
+            end
+            
+            str_split_nms = str_split_nms_sub;
+            
+            for n = 1:length(str_split_nms)
+                %                 this_grouping(m) = strcmp(str_split_nms{n},groupings{k});
+                this_grouping(m) = strcmp(str_split_nms{n},sub_groups{k});
                 if this_grouping(m)
                     break
                 end
             end
+
             
         end
         
         number_of_experiments_group = sum(this_grouping);
         
         this_grouping_idx = nonzeros((1:length(this_grouping)).*(this_grouping));
+        
+        if add_control_to_everything
+            
+            control_idx = find(string(groupings)=="Control",1);
+            
+            if isempty(control_idx)
+                control_idx = find(string(groupings)=="control",1);
+            end
+            
+            if ~isempty(control_idx)
+                this_grouping_idx = [this_grouping_idx;control_idx];
+                number_of_experiments_group = number_of_experiments_group+1;
+            else
+                disp('No group named ---Control--- present, graphing without control')
+            end
+            
+        end
         
         clear this_lifespan this_healthspan
         
@@ -228,8 +276,10 @@ if group_similar_data
             
             %     this_lifespan = sep_exps_days{i};
             
+            good_idx_grouping{i} = remove_bad_days(sep_exps_days{this_grouping_idx(i)});
+            
             if use_ecdf
-                [this_survival_curve,x] = ecdf(sep_exps_days{this_grouping_idx(i)},'censoring',censored_wells_any_separated{this_grouping_idx(i)},'function','survivor');
+                [this_survival_curve,x] = ecdf(sep_exps_days{this_grouping_idx(i)}(good_idx_grouping{i}),'censoring',censored_wells_any_separated{this_grouping_idx(i)}(good_idx_grouping{i}),'function','survivor');
                 
                 plot(x,this_survival_curve,...
                     'LineStyle','-','LineWidth',1,...
@@ -255,7 +305,7 @@ if group_similar_data
             end
             
         end
-        title(['Combined lifespans for ' full_exp_name '-' char(groupings(k))],'Interpreter','none');
+        title(['Combined lifespans for ' full_exp_name '-' char(sub_groups(k))],'Interpreter','none');
         ylabel('Percent remaining')
         xlabel('days survived on robot');
         % xlim([1,length(sess_nums{1}-1)])

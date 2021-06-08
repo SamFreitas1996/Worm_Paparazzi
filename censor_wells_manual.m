@@ -36,10 +36,15 @@ censored_wells=zeros(1,240);
 
 censor_userSelected=zeros(1,length(x)-1);
 for i = 1: length(x)-1
-    if ROI_overlay(round(y(i)),round(x(i)))>0   % makes sure an actual ROI was selected
-        censor_userSelected(i)=ROI_overlay(round(y(i)),round(x(i)));
-    else
+    try
+        if ROI_overlay(round(y(i)),round(x(i)))>0   % makes sure an actual ROI was selected
+            censor_userSelected(i)=ROI_overlay(round(y(i)),round(x(i)));
+        else
+            censor_userSelected(i)=0;
+        end
+    catch
         censor_userSelected(i)=0;
+        disp('Censoring error, ignoring')
     end
 end
 

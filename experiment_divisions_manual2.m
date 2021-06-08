@@ -1,6 +1,4 @@
-
-
-function experiment_divisions_manual2(exp_dir,newROIs,data_storage,exp_nm)
+function experiment_divisions_manual2(exp_dir,newROIs,data_storage,exp_nm,final_data_export_path,full_exp_name)
 % load in peaks data
 save_peaks_name = [data_storage 'raw_data/peaks.mat'];
 load(char(save_peaks_name))
@@ -130,7 +128,7 @@ while isequal(redo,'Yes')
             dosage_names{dosage_counter} = inputdlg(['What division was this Dosage selection? -- for ' exp_nm ' division: ' num2str(dosage_counter)]);
             
             try
-                for i = 1:length(selected_rois_dosages{1})
+                for i = 1:length(selected_rois_dosages{dosage_counter})
                     output_cells{selected_rois_dosages{dosage_counter}(i),2} = dosage_names{dosage_counter};
                 end
             catch
@@ -331,7 +329,7 @@ while isequal(redo,'Yes')
     for i = 1:length(dosage_names)
         num_roi = [num_roi;selected_rois_dosages{i}];
     end
-    num_roi = sort(num_roi)';
+    num_roi = unique(sort(num_roi))';
     
     if isequal(length(num_roi),length(num_roi_checker))
         if sum(num_roi-num_roi_checker)
@@ -348,7 +346,7 @@ while isequal(redo,'Yes')
     for i = 1:length(strain_names)
         num_roi = [num_roi;selected_rois_strains{i}];
     end
-    num_roi = sort(num_roi)';
+    num_roi = unique(sort(num_roi))';
     
     if isequal(length(num_roi),length(num_roi_checker))
         if sum(num_roi-num_roi_checker)
@@ -367,10 +365,19 @@ end
 %%%%%%%%%%%%%%%%output
 %%%%%% location on plate, dosage, strain,
 
+% make final output directory
+mkdir(fullfile(final_data_export_path,full_exp_name))
+mkdir(fullfile(final_data_export_path,full_exp_name,'divisions'))
+
+out_path = fullfile(final_data_export_path,full_exp_name,'divisions');
+% write division images
 imwrite(rgbImage,[data_storage 'divisions.png']);
+imwrite(rgbImage,fullfile(out_path,[exp_nm '_divisions_visual.png']))
 
 T = cell2table(output_cells(:,1:3),'VariableNames',header);
+% wirte division tables
 writetable(T,[data_storage 'divisions.csv'])
+writetable(T,fullfile(out_path,[exp_nm '_divisions.csv']))
 
 close all
 

@@ -62,10 +62,16 @@ for i = 1:length(sep_nms_full)
         
     [~,sort_idx] = sort(sep_exps_days{i});
     
+    good_idx{i} = remove_bad_days(sep_exps_days{i}(sort_idx));
+    
     this_grouping_name = sep_nms_full{i};
     this_exps_days = sep_exps_days{i}(sort_idx);
     this_activity_days = activities_full{i}(sort_idx);
     this_cen_any = censored_wells_any_separated{i}(sort_idx);
+    
+    this_exps_days = this_exps_days(good_idx{i});
+    this_activity_days = this_activity_days(good_idx{i});
+    this_cen_any = this_cen_any(good_idx{i});
         
     this_activity_img = zeros(length(this_activity_days)-sum(this_cen_any),overall_max_life);
     

@@ -7,7 +7,7 @@
 
 warning('off', 'MATLAB:MKDIR:DirectoryExists');
 % clc
-% clear all
+clear all
 close all force hidden 
 % % % % gpuDevice(1);
 % turns off the warning that says a directory (folder) already exists, is
@@ -21,7 +21,7 @@ close all force hidden
 use_last_experiment_setup = 0;
 % use the last experiment run again
 
-make_new_censors_and_divisions = 0;
+make_new_censors_and_divisions = 1;
 % this will create a new manual censors and divisions that the user specifies
 % 1 - normal make a unique censor 
 % 0 - testing, use previous censor 
@@ -42,6 +42,14 @@ skip_data_processing = 0;
 
 skip_nn_runoff = 0;
 % skip the neural network runoff in case it was already done
+
+ignore_badly_registered_sessions = 0;
+% sometimes there are badly registered sessions that need to be skipped
+% if the censor for this is wrong then you can skip it
+% 99% of the time the censor is correct, but somtimes high activity worms
+% in thick bacteria can trigger this, or plates without FUDR
+% 0 - censor badly registerd session - default
+% 1 - do not use censor 
 
 reduce_final_noise = 1;
 % this uses the completed zstacks to get rid of a most of the extra noise
@@ -171,6 +179,11 @@ if use_last_experiment_setup
     disp('using the last setup experiment');
 else
     exp_dir_path = uigetdir2('/groups/sutphin/');
+    
+    if isempty(exp_dir_path)
+        error('No experiment selected')
+    end
+    
 end
 
 % find number of plates and experiments total
@@ -247,7 +260,8 @@ for i = 1:number_of_plates
         load([data_storage{i} 'raw_data/newROIs.mat']);
         
         % create divisions interactive 
-        experiment_divisions_manual2(exp_dir{i},newROIs,data_storage{i},exp_nm{i})
+        experiment_divisions_manual2(exp_dir{i},newROIs,data_storage{i},exp_nm{i},...
+            final_data_export_path,full_exp_name)
         
         % create censors interactive
         censored_wells_manual = censor_wells_manual(exp_dir{i},newROIs);
@@ -282,7 +296,7 @@ if make_new_censors_and_divisions
 end
 clear newROIs tempCen temp_cen_wells_for_saving_badly
 
-% % create zstack raw data information and other post processing tools 
+% create zstack raw data information and other post processing tools 
 for i = 1:number_of_plates
     
     this_exp_dir_path = exp_dir_path{i};
@@ -299,8 +313,7 @@ for i = 1:number_of_plates
 
 end
 
-% analyze raw data sets
-
+% analyze raw data sets and calculate the first lifespan pass
 for i = 1:number_of_plates
     
     if ~skip_data_processing
@@ -319,13 +332,15 @@ for i = 1:number_of_plates
         
     end
     
-    
-    [potential_lifespans_days{i}, potential_lifespans_sess{i},worms_not_dead{i},data_points_to_omit{i}] = ...
+    [potential_lifespans_days{i}, potential_lifespans_sess{i},worms_not_dead{i},data_points_to_omit{i},worm_daily_activity{i}] = ...
         WP_calculate_death_daily...
         (raw_sess_data_aft{i}, raw_sess_data_bef{i}, ...
         raw_sess_data_integral{i},censored_wells_manual{i},...
         raw_sess_data_aft_bw{i},raw_sess_data_bef_bw{i},...
-        export_data,i,runoff_cutoff2{i},data_storage{i},min_activity,sess_activity_buffer,sess_nums{i},exp_nm{i},num_days{i},bw_analysis);
+        export_data,i,runoff_cutoff2{i},data_storage{i},...
+        min_activity,sess_activity_buffer,sess_nums{i},...
+        exp_nm{i},num_days{i},bw_analysis,ignore_badly_registered_sessions,...
+        final_data_export_path,full_exp_name);
 
 end
 
@@ -337,7 +352,7 @@ for i = 1:number_of_plates
         WP_runoff_nn_daily...
         (data_storage{i},exp_nm{i},censored_wells_manual{i},sess_nums{i},skip_nn_runoff,final_data_export_path,full_exp_name);
     
-    [potential_lifespans_days{i}, potential_lifespans_sess{i},worms_not_dead{i},potential_healthspans_days{i}] = ...
+    [potential_lifespans_days{i}, potential_lifespans_sess{i},worms_not_dead{i},potential_healthspans_days{i},worm_unresponsive_to_stimulus{i}] = ...
         WP_recalculate_death_daily...
         (data_storage{i},exp_nm{i},sess_nums{i},final_data_export_path,full_exp_name,worms_not_dead{i},data_points_to_omit{i});
     
@@ -345,7 +360,6 @@ for i = 1:number_of_plates
     
     WP_export_whole_plate_data_daily(export_data,temp_cen,data_storage{i},...
         exp_nm{i},i,sess_nums{i},num_days{i},final_data_export_path,full_exp_name,data_points_to_omit{i})
-    
     
 end
 
@@ -355,17 +369,24 @@ for i = 1:length(censored_wells_runoff_nn)
 end
 
 group_similar_data = 1;
-use_ecdf = 0;
+use_ecdf = 1;
+add_control_to_everything = 1;
 %Empirical cumulative distribution function
 
 plot_WP_data(data_storage,censored_wells_any,potential_lifespans_days,...
-    potential_lifespans_sess,potential_healthspans_days,final_data_export_path,full_exp_name,sess_nums,group_similar_data,use_ecdf)
+    potential_lifespans_sess,potential_healthspans_days,final_data_export_path,...
+    full_exp_name,sess_nums,group_similar_data,use_ecdf,add_control_to_everything,worm_daily_activity)
 
+plot_activity_WP_data(data_storage,censored_wells_any,potential_lifespans_days,...
+    potential_lifespans_sess,potential_healthspans_days,final_data_export_path,...
+    full_exp_name,sess_nums,group_similar_data,use_ecdf,add_control_to_everything,worm_daily_activity)
+
+close all
 
 % export final to csv
 WP_final_data_export2(exp_nm,data_storage,potential_lifespans_days,potential_healthspans_days,...
     censored_wells_manual,censored_wells_runoff_nn,censored_wells_runoff_var,worms_not_dead,...
-    final_data_export_path,full_exp_name,any_nn_activity,censored_wells2)
+    final_data_export_path,full_exp_name,any_nn_activity,censored_wells2,worm_daily_activity,worm_unresponsive_to_stimulus)
 
 
 
