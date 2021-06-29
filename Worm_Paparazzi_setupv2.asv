@@ -34,14 +34,16 @@ compute_new_zstack_data = 1;
 % 1 - normal, create new data
 % 0 - testing, just run data analysis and skip data creation
 
-skip_data_processing = 0;
+skip_data_processing = 1;
 % this will skip the WP_analysis step and go straight to the death
 % calculations and runoff predictions THIS WILL NOT SAVE .MAT IN _DATA
 % 0 - normal, keep analysis on
 % 1 - testing, skip the analysis step (speeds up testing)
 
-skip_nn_runoff = 0;
+skip_nn_runoff = 1;
 % skip the neural network runoff in case it was already done
+% 1 - skip
+% 0 - process - default
 
 ignore_badly_registered_sessions = 0;
 % sometimes there are badly registered sessions that need to be skipped
@@ -53,7 +55,6 @@ ignore_badly_registered_sessions = 0;
 
 reduce_final_noise = 1;
 % this uses the completed zstacks to get rid of a most of the extra noise
-% data, still experimental 
 % 1 - attempt to remove noise
 % 0 - do not remove noise and use raw zstacks 
 
@@ -95,7 +96,7 @@ start_sess = 1;
 % other - start on selected day
 
 min_activity = 750;
-% depreciated 
+% depreciated when using BW analysis 
 % this value is only necessary if bw_analysis = 0
 % minimun activity that needs to be present to threshold as a movement
 % lower is more sensitive 
@@ -109,6 +110,8 @@ runoff_cutoff = 0;
 % if 0 is chosen then the max activity of all the worms will be used
 % 0 - max activity
 % # - specific chosen session
+% as it currently stands the runoff cutoff if set to 0 will set the cutoff
+% (still not used but saved) to the index of the max activity session
 
 num_pics_per_session = 25;
 % this variable is depreciated, but a good reminder to make sure the amount
@@ -234,7 +237,7 @@ for i = 1:number_of_plates
     this_exp_dir_path = exp_dir_path{i};
     
     this_exp_dir = dir(this_exp_dir_path);
-    this_exp_dir(ismember( {this_exp_dir.name}, {'.', '..','raw_data','raw_data.mat'})) = [];  %remove . and ..
+    this_exp_dir(ismember( {this_exp_dir.name}, {'.', '..','raw_data','raw_data.mat','.DS_Store'})) = [];  %remove . and ..
     
     exp_dir{i} = this_exp_dir;
     
@@ -296,7 +299,7 @@ if make_new_censors_and_divisions
 end
 clear newROIs tempCen temp_cen_wells_for_saving_badly
 
-% % create zstack raw data information and other post processing tools 
+% create zstack raw data information and other post processing tools 
 for i = 1:number_of_plates
     
     this_exp_dir_path = exp_dir_path{i};
@@ -313,8 +316,7 @@ for i = 1:number_of_plates
 
 end
 
-% analyze raw data sets
-
+% analyze raw data sets and calculate the first lifespan pass
 for i = 1:number_of_plates
     
     if ~skip_data_processing
@@ -332,7 +334,6 @@ for i = 1:number_of_plates
             WP_dont_analyze_data(data_storage{i},final_data_export_path,full_exp_name,runoff_cutoff);
         
     end
-    
     
     [potential_lifespans_days{i}, potential_lifespans_sess{i},worms_not_dead{i},data_points_to_omit{i},worm_daily_activity{i}] = ...
         WP_calculate_death_daily...
@@ -362,7 +363,6 @@ for i = 1:number_of_plates
     
     WP_export_whole_plate_data_daily(export_data,temp_cen,data_storage{i},...
         exp_nm{i},i,sess_nums{i},num_days{i},final_data_export_path,full_exp_name,data_points_to_omit{i})
-    
     
 end
 

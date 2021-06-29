@@ -1,4 +1,4 @@
-% WP ROIs and data setups
+% WP ROIs and data setupsq
 
 % Worm Paparazzi data setup and preprocessing
 % Creates custom per-basis ROIs for each movement sessions
@@ -6,6 +6,7 @@
 % December 2019
 % Sutphin Lab - University of Arizona - 2019
 % must have a CUDA enabled GPU installed
+% [fList2,pList2] = matlab.codetools.requiredFilesAndProducts([pwd '/nn_WPdata_test.m']);
 
 warning('off', 'MATLAB:MKDIR:DirectoryExists');
 % turns off the warning that says a directory (folder) already exists, is

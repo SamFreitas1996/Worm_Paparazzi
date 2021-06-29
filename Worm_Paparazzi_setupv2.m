@@ -21,7 +21,7 @@ close all force hidden
 use_last_experiment_setup = 0;
 % use the last experiment run again
 
-make_new_censors_and_divisions = 1;
+make_new_censors_and_divisions = 0;
 % this will create a new manual censors and divisions that the user specifies
 % 1 - normal make a unique censor 
 % 0 - testing, use previous censor 
@@ -42,6 +42,8 @@ skip_data_processing = 0;
 
 skip_nn_runoff = 0;
 % skip the neural network runoff in case it was already done
+% 1 - skip
+% 0 - process - default
 
 ignore_badly_registered_sessions = 0;
 % sometimes there are badly registered sessions that need to be skipped
@@ -53,7 +55,6 @@ ignore_badly_registered_sessions = 0;
 
 reduce_final_noise = 1;
 % this uses the completed zstacks to get rid of a most of the extra noise
-% data, still experimental 
 % 1 - attempt to remove noise
 % 0 - do not remove noise and use raw zstacks 
 
@@ -95,7 +96,7 @@ start_sess = 1;
 % other - start on selected day
 
 min_activity = 750;
-% depreciated 
+% depreciated when using BW analysis 
 % this value is only necessary if bw_analysis = 0
 % minimun activity that needs to be present to threshold as a movement
 % lower is more sensitive 
@@ -109,6 +110,8 @@ runoff_cutoff = 0;
 % if 0 is chosen then the max activity of all the worms will be used
 % 0 - max activity
 % # - specific chosen session
+% as it currently stands the runoff cutoff if set to 0 will set the cutoff
+% (still not used but saved) to the index of the max activity session
 
 num_pics_per_session = 25;
 % this variable is depreciated, but a good reminder to make sure the amount
@@ -234,7 +237,7 @@ for i = 1:number_of_plates
     this_exp_dir_path = exp_dir_path{i};
     
     this_exp_dir = dir(this_exp_dir_path);
-    this_exp_dir(ismember( {this_exp_dir.name}, {'.', '..','raw_data','raw_data.mat'})) = [];  %remove . and ..
+    this_exp_dir(ismember( {this_exp_dir.name}, {'.', '..','raw_data','raw_data.mat','.DS_Store'})) = [];  %remove . and ..
     
     exp_dir{i} = this_exp_dir;
     
