@@ -32,6 +32,7 @@ incomplete_data_censor = cell(1,length(data_names));
 % this is a parfor loop
 
 % go through all the zstacks and covert them to binarized information 
+% % % % parfor i = 1:length(data_names)
 parfor i = 1:length(data_names)
     
     disp(['Reading data for session: ' num2str(i)])
@@ -161,7 +162,7 @@ parfor i = 1:length(data_names)
             end
         end
         
-        incomplete_data_censor{i} = temp_incompleted_data_idx
+        incomplete_data_censor{i} = temp_incompleted_data_idx;
         
     catch
         % if something goes wrong then skip the session 

@@ -35,7 +35,12 @@ for i = 1:length(divisions_full)
                         
             sep_nms{1,o} = [char(dosage_names(j)) ' - ' char(strain_names(k))];
             
-            separate_exps_per_plate(i) = sep_exps_counter;
+%             separate_exps_per_plate(i) = sep_exps_counter;
+            separate_exps_per_plate(i) = sum(~cellfun(@isempty,sep_well_locations));
+            
+            if i > 1
+                separate_exps_per_plate(i) = (separate_exps_per_plate(i)-sum(separate_exps_per_plate(1:i-1)));
+            end
             
             if ~isempty(sep_well_locations{1,o})
                 sep_exps_counter = sep_exps_counter+1;

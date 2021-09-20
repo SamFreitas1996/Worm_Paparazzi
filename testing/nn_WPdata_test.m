@@ -138,7 +138,12 @@ for o = 1:length(exp_dir_path)
     % important for upcoming session loading
     temp = sum(logical(locs),2);
     [temp,~] = find(temp>1);
+    try
     len_k=(locs(temp(1),2)-locs(temp(1),1)-1)/2;
+    catch
+    len_k = 12;
+    disp('Not enough sessions found, using default len_k = 12')
+    end
     clear temp
     % mkdir([data_storage '/raw_data'])
     
@@ -370,11 +375,16 @@ locs=zeros(length(exp_dir),4);
 disp(['Finding daily identifications']);
 
 sess_per_day = zeros(1,length(exp_dir));
+% parfor i = 1:length(exp_dir)
 parfor i = 1:length(exp_dir)
-    
+
     % loads in one of the daily image folders
     temp_folder = dir(fullfile([exp_dir(i).folder '/' exp_dir(i).name],'*.png'));
     temp_folder(ismember( {temp_folder.name}, {'.', '..','raw_data','raw_data.mat'})) = [];  %remove . and ..
+    
+    %%%%%%%%%%%%% Testing natsort 
+    [~,sorting_idx,~] = natsort({temp_folder.name});
+    temp_folder = temp_folder(sorting_idx);
     
     sums=(zeros(1,length(temp_folder)));
     
@@ -407,7 +417,7 @@ parfor i = 1:length(exp_dir)
     sums=gather(sums);
     
     % find if there is a significant difference (some are brighter than others)
-    % If they are brighter than theyre the middle excitation light
+    % If they are significantly brighter than theyre the middle excitation light
     % can adjust values if this messes up so it does work
     [pks_temp,locs_temp]=findpeaks(sums,'MinPeakDistance',10,'Threshold',10000000);
     

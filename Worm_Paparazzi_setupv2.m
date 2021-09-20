@@ -27,20 +27,20 @@ make_new_censors_and_divisions = 0;
 % 0 - testing, use previous censor 
 % if no censor exists or can be found a new one must be made
 
-compute_new_zstack_data = 1;
+compute_new_zstack_data = 0;
 % this will create new zstack data that will be used for the final data
 % analysis, turning this off will just load the previously created data and
 % skip the creation step - should only be used for testing
 % 1 - normal, create new data
 % 0 - testing, just run data analysis and skip data creation
 
-skip_data_processing = 0;
+skip_data_processing = 1;
 % this will skip the WP_analysis step and go straight to the death
 % calculations and runoff predictions THIS WILL NOT SAVE .MAT IN _DATA
 % 0 - normal, keep analysis on
 % 1 - testing, skip the analysis step (speeds up testing)
 
-skip_nn_runoff = 0;
+skip_nn_runoff = 1;
 % skip the neural network runoff in case it was already done
 % 1 - skip
 % 0 - process - default

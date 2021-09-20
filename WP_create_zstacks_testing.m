@@ -45,9 +45,14 @@ catch
 end
 % create len_k
 % find the first day where there is enough data 
-temp = sum(logical(locs),2);
-[temp,~] = find(temp>1);
-len_k=(locs(temp(1),2)-locs(temp(1),1)-1)/2;
+locs_temp = sum(logical(locs),2);
+[locs_temp,~] = find(locs_temp>1);
+try
+    len_k=(locs(locs_temp(1),2)-locs(locs_temp(1),1)-1)/2;
+catch
+    disp('Error in len_k process, using default len_k = 12');
+    len_k = 12;
+end
 clear temp
 
 % load in the experiment specific ROIs
@@ -126,7 +131,7 @@ clear newROIs
 tic
 % parfor loops through all the sessions to make the zstack datas 
 if compute_new_zstack_data
-%     start_sess = 2;
+% % %     start_sess = length(newROIs2) - sum(sess_per_day(end-1:end));
     %%%%% should be parfor
     parfor i=start_sess:num_sess
         
@@ -137,6 +142,11 @@ if compute_new_zstack_data
         
         % variables to load image data
         temp_dir = daily_dir{a};
+        
+        %%%%%%%%%%%%% Testing natsort
+        [~,sorting_idx,~] = natsort({temp_dir.name});
+        temp_dir = temp_dir(sorting_idx);
+        
         img_idx_aft = (locs(a,b)+1:locs(a,b)+len_k);
         img_idx_bef = img_idx_aft-len_k-1;
         
@@ -297,8 +307,8 @@ if compute_new_zstack_data
             if indiv_ROI_norm
                 
                 % create a mean image
-                temp = [stack_aft stack_bef];
-                mean_img = mean((cat(3,temp{1:end})),3);
+                locs_temp = [stack_aft stack_bef];
+                mean_img = mean((cat(3,locs_temp{1:end})),3);
                 
                 % use the mean image from the entire session
                 scaling_ROI = zeros(size(newROIs2{i}));

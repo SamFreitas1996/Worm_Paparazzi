@@ -227,16 +227,31 @@ images_large = cell(1,length(ROI_nums));
 % isolate each well
 images = cell(length(ROI_nums),num_images);
 parfor j = lowBound:highBound
+    
     thisROI = newROIs{j};
     thisDiff = diff_imgs{j};
     try
         for i = ROI_nums
-            s = regionprops(thisROI==i,'BoundingBox');
-            xMin = ceil(s.BoundingBox(1));
-            xMax = xMin + s.BoundingBox(3) - 1;
-            yMin = ceil(s.BoundingBox(2));
-            yMax = yMin + s.BoundingBox(4) - 1;
-            images{i,j} = thisDiff(yMin:yMax,xMin:xMax);
+            try
+                s = regionprops(thisROI==i,'BoundingBox');
+                xMin = ceil(s.BoundingBox(1));
+                xMax = xMin + s.BoundingBox(3) - 1;
+                yMin = ceil(s.BoundingBox(2));
+                yMax = yMin + s.BoundingBox(4) - 1;
+                images{i,j} = thisDiff(yMin:yMax,xMin:xMax);
+            catch
+                disp(['There was an error creating data on session ' num2str(j) ' well ' num2str(i)])
+                s = regionprops(thisROI==120,'BoundingBox');
+                try
+                    error_zero_img = zeros(s.BoundingBox(3),s.BoundingBox(4),'uint8');
+                catch
+                    s = regionprops(thisROI==115,'BoundingBox');
+                    error_zero_img = zeros(s.BoundingBox(3),s.BoundingBox(4),'uint8');
+                end
+                
+                images{i,j} = error_zero_img;
+
+            end
         end
     catch
         disp(['There was an error creating data on session ' num2str(j)])
@@ -245,9 +260,13 @@ parfor j = lowBound:highBound
             error_zero_img = zeros(s.BoundingBox(3),s.BoundingBox(4),'uint8');
         catch
             s = regionprops(thisROI==115,'BoundingBox');
-            error_zero_img = zeros(s.BoundingBox(3),s.BoundingBox(4),'uint8');
+            try
+                error_zero_img = zeros(s.BoundingBox(3),s.BoundingBox(4),'uint8');
+            catch
+                disp('using 205x250')
+                error_zero_img = zeros(205,205,'uint8');
+            end
         end
-        
         for i = ROI_nums
             images{i,j} = error_zero_img;
         end
